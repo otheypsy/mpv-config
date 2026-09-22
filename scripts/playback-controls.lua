@@ -1,4 +1,3 @@
-local options = require "mp.options"
 local msg = require "mp.msg"
 local utils = require "mp.utils"
 local ass_start = mp.get_property_osd("osd-ass-cc/0")
@@ -20,9 +19,12 @@ end
 local function bind_relative_seek()
     local relative_seek_keys = {
         [{ "z", "x" }] = { 1, 1 },
-        [{ "LEFT", "RIGHT" }] = { 2, 1 },
         [{ "a", "s" }] = { 10, 5 },
-        [{ "q", "w" }] = { 20, 10 }
+        [{ "q", "w" }] = { 20, 10 },
+
+        [{ "LEFT", "RIGHT" }] = { 2, 1 },
+        [{ "KP1", "KP3" }] = { 30, 20 },
+        [{ "KP4", "KP6" }] = { 60, 50 },
     }
 
     for keys, delta in pairs(relative_seek_keys) do
@@ -47,15 +49,25 @@ local function bind_absolute_seek()
         local base = key * 10
         local click_data = {
             click = "seek  " ..
-                base + 0 .. " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" .. base + 0 .. "%'",
+                base + 0 ..
+                " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" ..
+                base + 0 .. "%'",
             double_click = "seek  " ..
-                base + 2 .. " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" .. base + 2 .. "%'",
+                base + 2 ..
+                " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" ..
+                base + 2 .. "%'",
             triple_click = "seek  " ..
-                base + 4 .. " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" .. base + 4 .. "%'",
+                base + 4 ..
+                " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" ..
+                base + 4 .. "%'",
             quatra_click = "seek  " ..
-                base + 6 .. " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" .. base + 6 .. "%'",
+                base + 6 ..
+                " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" ..
+                base + 6 .. "%'",
             penta_click = "seek  " ..
-                base + 8 .. " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" .. base + 8 .. "%'",
+                base + 8 ..
+                " absolute-percent+exact ; show-text '${osd-ass-cc/0}{\\an5}{\\fs20}" ..
+                base + 8 .. "%'",
         }
         local json, err = utils.format_json(click_data)
         if json then
@@ -77,7 +89,8 @@ local function on_seek(seek_delta_string, msg_delay_string)
     if seek_delta > 0 then
         osd_text = osd_text ..
             "{\\an6}{\\fs20}" ..
-            math.abs(seek_delta) .. "s{\\fs10}{\\fnmodernz-icons} material_fast_forward_filled {\\fnosd-font}"
+            math.abs(seek_delta) ..
+            "s{\\fs10}{\\fnmodernz-icons} material_fast_forward_filled {\\fnosd-font}"
     else
         osd_text = osd_text ..
             "{\\an4}{\\fs10}{\\fnmodernz-icons} material_fast_rewind_filled {\\fnosd-font}{\\fs20}" ..
@@ -90,7 +103,7 @@ local function on_seek(seek_delta_string, msg_delay_string)
     mp.osd_message(osd_text, msg_delay)
 end
 
-local function handle_message(arg1, arg2, arg3)
+local function on_script_message(arg1, arg2, arg3)
     if arg1 == "seek" then
         on_seek(arg2, arg3)
     end
@@ -100,7 +113,7 @@ local function custom_seek(value)
     msg.info("Custom Seek", value)
 end
 
-mp.register_script_message("playback-controls", handle_message)
+mp.register_script_message("playback-controls", on_script_message)
 mp.add_key_binding(nil, "custom_seek", custom_seek)
 bind_absolute_seek()
 bind_relative_seek()

@@ -19,7 +19,7 @@
 //!HEIGHT NATIVE_CROPPED.h
 //!WHEN NATIVE_CROPPED.h OUTPUT.h <
 //!COMPONENTS 4
-//!DESC SSim-SR-Mitchell (Downscaling I)
+//!DESC SSim-SR (Downscaling I)
 
 #define axis        1
 
@@ -62,7 +62,7 @@ vec4 hook() {
 //!HEIGHT NATIVE_CROPPED.h
 //!WHEN NATIVE_CROPPED.w OUTPUT.w <
 //!COMPONENTS 4
-//!DESC SSim-SR-Mitchell (Downscaling II)
+//!DESC SSim-SR (Downscaling II)
 
 #define axis        0
 
@@ -106,7 +106,7 @@ vec4 hook() {
 //!HEIGHT NATIVE_CROPPED.h
 //!WHEN NATIVE_CROPPED.h OUTPUT.h <
 //!COMPONENTS 2
-//!DESC SSim-SR-Mitchell (Var)
+//!DESC SSim-SR (Var)
 
 #define spread      1.0 / 4.0
 
@@ -146,9 +146,9 @@ vec4 hook() {
 //!BIND LOWRES
 //!BIND var
 //!WHEN NATIVE_CROPPED.h OUTPUT.h <
-//!DESC SSim-SR-Mitchell (Final Pass)
+//!DESC SSim-SR (Final Pass)
 
-#define oversharp   0.4
+#define oversharp   0.5
 
 // -- Window Size --
 #define taps        3.0

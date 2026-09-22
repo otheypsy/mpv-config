@@ -1,0 +1,1 @@
+@python "%APPDATA%\mpv\umpv\umpv.py" %*

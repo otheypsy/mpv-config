@@ -545,7 +545,7 @@ function mp.unregister_script_message(name) end
 ---@field update function
 ---@field remove function
 ---@field data string
-
+---@field z number
 -- Create an OSD overlay. This is a very thin wrapper around the `osd-overlay`
 -- command. The function returns a table, which mostly contains fields that
 -- will be passed to `osd-overlay`. The `format` parameter is used to

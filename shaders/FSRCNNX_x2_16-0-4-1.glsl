@@ -15,7 +15,7 @@
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 feature map 1
+//!DESC FSRCNN-X-16 (Feature Map 1)
 //!BIND LUMA
 //!SAVE FEATURE1
 //!COMPONENTS 4
@@ -52,7 +52,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 feature map 2
+//!DESC FSRCNN-X-16 (Feature Map 2)
 //!BIND LUMA
 //!SAVE FEATURE2
 //!COMPONENTS 4
@@ -89,7 +89,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 feature map 3
+//!DESC FSRCNN-X-16 (Feature Map 3)
 //!BIND LUMA
 //!SAVE FEATURE3
 //!COMPONENTS 4
@@ -126,7 +126,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 feature map 4
+//!DESC FSRCNN-X-16 (Feature Map 4)
 //!BIND LUMA
 //!SAVE FEATURE4
 //!COMPONENTS 4
@@ -163,7 +163,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 1-1
+//!DESC FSRCNN-X-16 (Mapping 1-1)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -215,7 +215,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 1-2
+//!DESC FSRCNN-X-16 (Mapping 1-2)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -267,7 +267,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 1-3
+//!DESC FSRCNN-X-16 (Mapping 1-3)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -319,7 +319,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 1-4
+//!DESC FSRCNN-X-16 (Mapping 1-4)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -371,7 +371,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 2-1
+//!DESC FSRCNN-X-16 (Mapping 2-1)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -423,7 +423,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 2-2
+//!DESC FSRCNN-X-16 (Mapping 2-2)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -475,7 +475,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 2-3
+//!DESC FSRCNN-X-16 (Mapping 2-3)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -527,7 +527,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 2-4
+//!DESC FSRCNN-X-16 (Mapping 2-4)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -579,7 +579,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 3-1
+//!DESC FSRCNN-X-16 (Mapping 3-1)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -631,7 +631,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 3-2
+//!DESC FSRCNN-X-16 (Mapping 3-2)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -683,7 +683,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 3-3
+//!DESC FSRCNN-X-16 (Mapping 3-3)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -735,7 +735,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 3-4
+//!DESC FSRCNN-X-16 (Mapping 3-4)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -787,7 +787,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 4-1
+//!DESC FSRCNN-X-16 (Mapping 4-1)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -839,7 +839,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 4-2
+//!DESC FSRCNN-X-16 (Mapping 4-2)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -891,7 +891,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 4-3
+//!DESC FSRCNN-X-16 (Mapping 4-3)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -943,7 +943,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 mapping 4-4
+//!DESC FSRCNN-X-16 (Mapping 4-4)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -995,7 +995,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 sub-band residuals 1
+//!DESC FSRCNN-X-16 (Sub-band Residuals 1) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1017,7 +1017,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 sub-band residuals 2
+//!DESC FSRCNN-X-16 (Sub-band Residuals 2) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1039,7 +1039,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 sub-band residuals 3
+//!DESC FSRCNN-X-16 (Sub-band Residuals 3) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1061,7 +1061,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 sub-band residuals 4
+//!DESC FSRCNN-X-16 (Sub-band Residuals 4) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1083,7 +1083,7 @@ return res;
 
 //!HOOK LUMA
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
-//!DESC FSRCNN-X-16 sub-pixel convolution 1
+//!DESC FSRCNN-X-16 (Sub-pixel Convolution 1)
 //!BIND RES1
 //!BIND RES2
 //!BIND RES3
@@ -1136,7 +1136,7 @@ return vec4(res);
 //!WHEN OUTPUT.w LUMA.w / 1.300 > OUTPUT.h LUMA.h / 1.300 > *
 //!WIDTH LUMA.w 2 *
 //!HEIGHT LUMA.h 2 *
-//!DESC FSRCNN-X-16 aggregation
+//!DESC FSRCNN-X-16 (Aggregation)
 //!BIND SUBCONV1
 vec4 hook()
 {

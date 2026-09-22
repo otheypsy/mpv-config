@@ -1,5 +1,5 @@
 //!HOOK LUMA
-//!DESC FSRCNNX Feature Map 1
+//!DESC FSRCNN-X16-Distort Feature (Map 1)
 //!BIND LUMA
 //!SAVE FEATURE1
 //!COMPONENTS 4
@@ -35,7 +35,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Feature Map 2
+//!DESC FSRCNN-X16-Distort (Feature Map 2)
 //!BIND LUMA
 //!SAVE FEATURE2
 //!COMPONENTS 4
@@ -71,7 +71,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Feature Map 3
+//!DESC FSRCNN-X16-Distort (Feature Map 3)
 //!BIND LUMA
 //!SAVE FEATURE3
 //!COMPONENTS 4
@@ -107,7 +107,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Feature Map 4
+//!DESC FSRCNN-X16-Distort (Feature Map 4)
 //!BIND LUMA
 //!SAVE FEATURE4
 //!COMPONENTS 4
@@ -143,7 +143,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 1_1
+//!DESC FSRCNN-X16-Distort (Mapping 1-1)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -194,7 +194,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 1_2
+//!DESC FSRCNN-X16-Distort (Mapping 1-2)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -245,7 +245,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 1_3
+//!DESC FSRCNN-X16-Distort (Mapping 1-3)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -296,7 +296,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 1_4
+//!DESC FSRCNN-X16-Distort (Mapping 1-4)
 //!BIND FEATURE1
 //!BIND FEATURE2
 //!BIND FEATURE3
@@ -347,7 +347,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 2_1
+//!DESC FSRCNN-X16-Distort (Mapping 2-1)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -398,7 +398,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 2_2
+//!DESC FSRCNN-X16-Distort (Mapping 2-2)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -449,7 +449,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 2_3
+//!DESC FSRCNN-X16-Distort (Mapping 2-3)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -500,7 +500,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 2_4
+//!DESC FSRCNN-X16-Distort (Mapping 2-4)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -551,7 +551,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 3_1
+//!DESC FSRCNN-X16-Distort (Mapping 3-1)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -602,7 +602,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 3_2
+//!DESC FSRCNN-X16-Distort (Mapping 3-2)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -653,7 +653,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 3_3
+//!DESC FSRCNN-X16-Distort (Mapping 3-3)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -704,7 +704,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 3_4
+//!DESC FSRCNN-X16-Distort (Mapping 3-4)
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -755,7 +755,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 4_1
+//!DESC FSRCNN-X16-Distort (Mapping 4-1)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -806,7 +806,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 4_2
+//!DESC FSRCNN-X16-Distort (Mapping 4-2)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -857,7 +857,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 4_3
+//!DESC FSRCNN-X16-Distort (Mapping 4-3)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -908,7 +908,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Mapping 4_4
+//!DESC FSRCNN-X16-Distort (Mapping 4-4)
 //!BIND MODEL21
 //!BIND MODEL22
 //!BIND MODEL23
@@ -959,7 +959,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Sub-band Residuals  1
+//!DESC FSRCNN-X16-Distort (Sub-band Residuals 1) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -980,7 +980,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Sub-band Residuals  2
+//!DESC FSRCNN-X16-Distort (Sub-band Residuals 2) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1001,7 +1001,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Sub-band Residuals  3
+//!DESC FSRCNN-X16-Distort (Sub-band Residuals 3) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1022,7 +1022,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Sub-band Residuals  4
+//!DESC FSRCNN-X16-Distort (Sub-band Residuals 4) 
 //!BIND MODEL1
 //!BIND MODEL2
 //!BIND MODEL3
@@ -1043,7 +1043,7 @@ return res;
 }
 
 //!HOOK LUMA
-//!DESC FSRCNNX Sub-pixel Convolution 1
+//!DESC FSRCNN-X16-Distort (Sub-pixel Convolution 1)
 //!BIND RES1
 //!BIND RES2
 //!BIND RES3

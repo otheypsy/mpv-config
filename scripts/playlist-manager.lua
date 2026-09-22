@@ -242,7 +242,7 @@ local settings = {
     display_osd_feedback = true,
 
     resolution_labels = [[
-        {"id":"not_found","label":"NULL"}
+        {"id":"not_found","label":"NIL"}
         {"id":"sd","label":"SD"},
         {"id":"hd","label":"HD"},
         {"id":"fhd","label":"FHD"},
@@ -251,7 +251,8 @@ local settings = {
     ]]
 }
 local opts = require("mp.options")
-opts.read_options(settings, "playlist-manager", function(list) Update_Opts(list) end)
+opts.read_options(settings, "playlist-manager",
+                  function(list) Update_Opts(list) end)
 
 local utils = require("mp.utils")
 local msg = require("mp.msg")
@@ -316,7 +317,7 @@ if settings.show_amount == -1 then
         end
     end
 
-    settings.show_amount = settings.show_amount - 2
+    settings.show_amount = settings.show_amount - 4
     msg.info("auto show_amount: " .. settings.show_amount)
 end
 
@@ -334,6 +335,7 @@ local reversed_playlist_on_startup = false
 --table for saved media titles for later if we prefer them
 local title_table = {}
 local metadata_table = {}
+local fetching_data = false
 -- table for urls and local file paths that we have requested to be resolved to titles
 local requested_titles = {}
 
@@ -350,161 +352,6 @@ local function refresh_ui()
     refresh_globals()
     if plen == 0 then return end
     Draw_Playlist()
-end
-
-function Update_Opts(changelog)
-    msg.verbose("updating options")
-
-    --parse filename json
-    if changelog.filename_replace then
-        if (settings.filename_replace ~= "") then
-            settings.filename_replace = utils.parse_json(settings.filename_replace)
-        else
-            settings.filename_replace = false
-        end
-    end
-
-    -- parse loadfiles json
-    if changelog.loadfiles_filetypes then
-        settings.loadfiles_filetypes = utils.parse_json(settings.loadfiles_filetypes)
-
-        filetype_lookup = {}
-        --create loadfiles set
-        for _, ext in ipairs(settings.loadfiles_filetypes) do
-            filetype_lookup[ext] = true
-        end
-    end
-
-    -- parse resolution labels json
-    if changelog.resolution_labels then
-        settings.resolution_labels = utils.parse_json(settings.resolution_labels)
-
-        local max_length = 0
-        resolution_labels = {}
-        --create loadfiles set
-        for _, item in ipairs(settings.resolution_labels) do
-            resolution_labels[item["id"]] = item["label"]
-            if string.len(item["label"]) > max_length then
-                max_length = string.len(item["label"])
-            end
-        end
-        resolution_labels["max_length"] = max_length
-    end
-
-    if changelog.resolve_url_titles then
-        resolve_titles()
-    end
-
-    if changelog.resolve_local_titles then
-        resolve_titles()
-    end
-
-    if changelog.resolve_playtime_duration or changelog.resolve_video_resolution then
-        resolve_metadata()
-    end
-
-    if changelog.playlist_display_timeout then
-        PM_Keybinds_Timer = mp.add_periodic_timer(settings.playlist_display_timeout, remove_keybinds)
-        PM_Keybinds_Timer:kill()
-    end
-
-    refresh_ui()
-end
-
-Update_Opts({ filename_replace = true, loadfiles_filetypes = true, resolution_labels = true })
-
------ winapi start -----
--- in windows system, we can use the sorting function provided by the win32 API
--- see https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-strcmplogicalw
-local winapisort = nil
-if settings.system == "windows" then
-    -- ffiok is false usually means the mpv builds without luajit
-    local ffiok, ffi = pcall(require, "ffi")
-    if ffiok then
-        ffi.cdef [[
-      int MultiByteToWideChar(unsigned int CodePage, unsigned long dwFlags, const char *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
-      int StrCmpLogicalW(const wchar_t * psz1, const wchar_t * psz2);
-    ]]
-
-        local shlwapi = ffi.load("shlwapi.dll")
-
-        function MultiByteToWideChar(MultiByteStr)
-            local UTF8_CODEPAGE = 65001
-            if MultiByteStr then
-                local utf16_len = ffi.C.MultiByteToWideChar(UTF8_CODEPAGE, 0, MultiByteStr, -1, nil, 0)
-                if utf16_len > 0 then
-                    local utf16_str = ffi.new("wchar_t[?]", utf16_len)
-                    if ffi.C.MultiByteToWideChar(UTF8_CODEPAGE, 0, MultiByteStr, -1, utf16_str, utf16_len) > 0 then
-                        return utf16_str
-                    end
-                end
-            end
-            return ""
-        end
-
-        winapisort = function(a, b)
-            return shlwapi.StrCmpLogicalW(MultiByteToWideChar(a), MultiByteToWideChar(b)) < 0
-        end
-    end
-end
------ winapi end -----
-
-local sort_modes = {
-    {
-        id = "name-asc",
-        title = "name ascending",
-        sort_fn = function(a, b, playlist)
-            if winapisort ~= nil then
-                return winapisort(playlist[a].string, playlist[b].string)
-            end
-            return alphanumsort(playlist[a].string, playlist[b].string)
-        end,
-    },
-    {
-        id = "name-desc",
-        title = "name descending",
-        sort_fn = function(a, b, playlist)
-            if winapisort ~= nil then
-                return winapisort(playlist[b].string, playlist[a].string)
-            end
-            return alphanumsort(playlist[b].string, playlist[a].string)
-        end,
-    },
-    {
-        id = "date-asc",
-        title = "date ascending",
-        sort_fn = function(a, b)
-            return (get_file_info(a).mtime or 0) < (get_file_info(b).mtime or 0)
-        end,
-    },
-    {
-        id = "date-desc",
-        title = "date descending",
-        sort_fn = function(a, b)
-            return (get_file_info(a).mtime or 0) > (get_file_info(b).mtime or 0)
-        end,
-    },
-    {
-        id = "size-asc",
-        title = "size ascending",
-        sort_fn = function(a, b)
-            return (get_file_info(a).size or 0) < (get_file_info(b).size or 0)
-        end,
-    },
-    {
-        id = "size-desc",
-        title = "size descending",
-        sort_fn = function(a, b)
-            return (get_file_info(a).size or 0) > (get_file_info(b).size or 0)
-        end,
-    },
-}
-
-local sort_mode = 1
-for mode, sort_data in pairs(sort_modes) do
-    if sort_data.id == settings.default_sort then
-        sort_mode = mode
-    end
 end
 
 local function is_protocol(path)
@@ -539,14 +386,14 @@ local function utf8_sub(s, i, j)
         if i <= idx and idx <= j then
             local width = #char > 2 and 2 or 1
             idx = idx + width
-            t[#t + 1] = char
+            t[#t+1] = char
         end
     end
     return table.concat(t)
 end
 
 --strip a filename based on its extension or protocol according to rules in settings
-function Strip_Filename(pathfile, media_title)
+function strip_filename(pathfile, media_title)
     if pathfile == nil then return "" end
     local ext = pathfile:match("%.([^%.]+)$")
     local protocol = pathfile:match("^(%a%a+)://")
@@ -557,7 +404,8 @@ function Strip_Filename(pathfile, media_title)
             if replace_table_has_value(ext, v["ext"]) or replace_table_has_value(protocol, v["protocol"]) then
                 for ruleindex, indexrules in ipairs(v["rules"]) do
                     for rule, override in pairs(indexrules) do
-                        override = filename_replace_functions[override] or override
+                        override = filename_replace_functions[override] or
+                            override
                         tmp = tmp:gsub(rule, override)
                     end
                 end
@@ -572,7 +420,7 @@ function Strip_Filename(pathfile, media_title)
 end
 
 --gets the file info of an item
-function get_file_info(item)
+local function get_file_info(item)
     local path = mp.get_property("playlist/" .. item - 1 .. "/filename")
     if is_protocol(path) then return {} end
     local file_info = utils.file_info(path)
@@ -594,7 +442,8 @@ local function get_name_from_index(i, notitle)
     local title = mp.get_property("playlist/" .. i .. "/title")
     local name = mp.get_property("playlist/" .. i .. "/filename")
 
-    local should_use_title = settings.prefer_titles == "all" or is_protocol(name) and settings.prefer_titles == "url"
+    local should_use_title = settings.prefer_titles == "all" or
+        is_protocol(name) and settings.prefer_titles == "url"
 
     --check if file has a media title stored
     if not title and should_use_title and title_table[name] then
@@ -605,14 +454,18 @@ local function get_name_from_index(i, notitle)
     if title and not notitle and should_use_title then
         -- Escape a string for verbatim display on the OSD
         -- Ref: https://github.com/mpv-player/mpv/blob/94677723624fb84756e65c8f1377956667244bc9/player/lua/stats.lua#L145
-        return Strip_Filename(title, true):gsub("\\", "\\\239\187\191"):gsub("{", "\\{"):gsub("^ ", "\\h")
+        return strip_filename(title, true)
+            :gsub("\\", "\\\239\187\191")
+            :gsub("{", "\\{")
+            :gsub("^ ", "\\h")
     end
 
     --remove paths if they exist, keeping protocols for stripping
     if string.sub(name, 1, 1) == "/" or name:match("^%a:[/\\]") then
         _, name = utils.split_path(name)
     end
-    return Strip_Filename(name):gsub("\\", "\\\239\187\191"):gsub("{", "\\{"):gsub("^ ", "\\h")
+    return strip_filename(name):gsub("\\", "\\\239\187\191"):gsub("{", "\\{")
+        :gsub("^ ", "\\h")
 end
 
 local function get_metadata_from_index(i)
@@ -622,22 +475,21 @@ local function get_metadata_from_index(i)
     end
 
     local filename = mp.get_property("playlist/" .. i .. "/filename")
-    local metadata = metadata_table[filename]
-    if not metadata then
-        metadata = {
-            duration = "xx:xx:xx",
-            resolution = resolution_labels["not_found"] or "NA"
-        }
-    end
-    metadata["max_length"] = resolution_labels["max_length"] or ""
+    local metadata = {
+        duration = metadata_table[filename]["duration"] or "xx:xx:xx",
+        resolution = metadata_table[filename]["resolution"] or "ERR"
+    }
     msg.verbose(utils.format_json(metadata))
     return metadata
 end
 
-function Parse_Header(string)
-    local esc_title = Strip_Filename(mp.get_property("media-title"), true):gsub("%%", "%%%%")
-    local esc_file = Strip_Filename(mp.get_property("filename")):gsub("%%", "%%%%")
-    return string:gsub("%%N", "\\N")
+local function parse_header(string)
+    local esc_title = strip_filename(mp.get_property("media-title"), true):gsub(
+        "%%", "%%%%")
+    local esc_file = strip_filename(mp.get_property("filename")):gsub("%%",
+                                                                      "%%%%")
+    return string
+        :gsub("%%N", "\\N")
         -- add a blank character at the end of each '\N'  to ensure that the height of the empty line is the same as the non empty line
         :gsub("\\N", "\\N ")
         :gsub("%%pos", mp.get_property_number("playlist-pos", 0) + 1)
@@ -651,12 +503,13 @@ end
 
 local function parse_playlist_entry(string, name, metadata, index)
     local base = tostring(plen):len()
-    local esc_name = Strip_Filename(name):gsub("%%", "%%%%")
+    local esc_name = strip_filename(name):gsub("%%", "%%%%")
+    metadata = metadata or {}
     return string:gsub("%%N", "\\N")
         :gsub("%%pos", string.format("%0" .. base .. "d", index + 1))
         :gsub("%%name", esc_name)
-        :gsub("%%dur", metadata["duration"])
-        :gsub("%%res", string.format("%" .. metadata["max_length"] .. "s", metadata["resolution"]))
+        :gsub("%%dur", metadata["duration"] or "")
+        :gsub("%%res", metadata["resolution"] or "")
         -- undo name escape
         :gsub("%%%%", "%%")
 end
@@ -690,7 +543,7 @@ local function parse_playlist_entry_by_index(index)
     return parse_playlist_entry(template, name, metadata, index)
 end
 
-function is_terminal_mode()
+local function is_terminal_mode()
     local width, height, aspect_ratio = mp.get_osd_size()
     return width == 0 and height == 0 and aspect_ratio == 0
 end
@@ -711,7 +564,8 @@ function Draw_Playlist()
     if settings.curtain_opacity ~= nil and settings.curtain_opacity ~= 0 and settings.curtain_opacity <= 1.0 then
         -- curtain dim from https://github.com/christoph-heinrich/mpv-quality-menu/blob/501794bfbef468ee6a61e54fc8821fe5cd72c4ed/quality-menu.lua#L699-L707
         local alpha = 255 - math.ceil(255 * settings.curtain_opacity)
-        ass.text = string.format("{\\pos(0,0)\\rDefault\\an7\\1c&H000000&\\alpha&H%X&}", alpha)
+        ass.text = string.format(
+            "{\\pos(0,0)\\rDefault\\an7\\1c&H000000&\\alpha&H%X&}", alpha)
         ass:draw_start()
         ass:rect_cw(0, 0, w, h)
         ass:draw_stop()
@@ -729,8 +583,10 @@ function Draw_Playlist()
         if bord ~= nil then border_size = bord end
     end
     ass:append(string.format("{\\clip(%f,%f,%f,%f)}",
-        settings.text_padding_x - border_size, settings.text_padding_y - border_size,
-        w - 1 - settings.text_padding_x + border_size, h - 1 - settings.text_padding_y + border_size))
+                             settings.text_padding_x - border_size,
+                             settings.text_padding_y - border_size,
+                             w - 1 - settings.text_padding_x + border_size,
+                             h - 1 - settings.text_padding_y + border_size))
 
     -- align from mpv.conf
     local align_x = mp.get_property("osd-align-x")
@@ -764,7 +620,7 @@ function Draw_Playlist()
     ass:pos(pos_x, pos_y)
 
     if settings.playlist_header ~= "" then
-        local header = Parse_Header(settings.playlist_header)
+        local header = parse_header(settings.playlist_header)
         ass:append(header .. "\\N")
         terminal_output = terminal_output .. header .. "\n"
     end
@@ -800,13 +656,16 @@ function Draw_Playlist()
     for display_index, playlist_index in pairs(visible_indices) do
         if display_index == 1 and playlist_index ~= 1 then
             ass:append(settings.playlist_sliced_prefix .. "\\N\\N")
-            terminal_output = terminal_output .. settings.playlist_sliced_prefix .. "\n"
+            terminal_output = terminal_output ..
+                settings.playlist_sliced_prefix .. "\n"
         elseif display_index == settings.show_amount and playlist_index ~= plen then
             ass:append("\\N" .. settings.playlist_sliced_suffix)
-            terminal_output = terminal_output .. settings.playlist_sliced_suffix .. "\n"
+            terminal_output = terminal_output ..
+                settings.playlist_sliced_suffix .. "\n"
         else
             -- parse_playlist_entry_by_index expects 0 based index
-            local playlist_item = parse_playlist_entry_by_index(playlist_index - 1)
+            local playlist_item = parse_playlist_entry_by_index(playlist_index -
+                1)
             ass:append(playlist_item .. "\\N")
             terminal_output = terminal_output .. playlist_item .. "\n"
         end
@@ -837,13 +696,15 @@ end
 function handle_complex_playlist_toggle(table)
     local event = table["event"]
     if event == "press" then
-        msg.error("Complex key event not supported. Falling back to normal playlist display.")
+        msg.error(
+            "Complex key event not supported. Falling back to normal playlist display.")
         Show_Playlist()
     elseif event == "down" then
         Show_Playlist(1000000)
         if settings.peek_respect_display_timeout then
             peek_button_pressed = true
-            peek_display_timer = mp.add_periodic_timer(settings.playlist_display_timeout, peek_timeout)
+            peek_display_timer = mp.add_periodic_timer(
+                settings.playlist_display_timeout, peek_timeout)
         end
     elseif event == "up" then
         -- set playlist state to not visible, doesn't actually hide playlist yet
@@ -881,6 +742,10 @@ function toggle_playlist(show_function)
 end
 
 function Show_Playlist(duration)
+    if fetching_data then
+        mp.commandv('show-text', "Playlist Manager is fetching metadata...")
+        return
+    end
     refresh_globals()
     if plen == 0 then return end
     if not playlist_visible and settings.reset_cursor_on_open then
@@ -986,7 +851,9 @@ function movepageup()
     local offset = settings.show_amount % 2 == 0 and 1 or 0
     local last_file_that_doesnt_scroll = math.ceil(settings.show_amount / 2)
     local reverse_cursor = plen - cursor
-    local files_to_jump = math.max(last_file_that_doesnt_scroll + offset - reverse_cursor, 0) + settings.show_amount - 2
+    local files_to_jump = math.max(
+            last_file_that_doesnt_scroll + offset - reverse_cursor, 0) +
+        settings.show_amount - 2
     local prev_cursor = cursor
     cursor = cursor - files_to_jump
     if cursor < last_file_that_doesnt_scroll then
@@ -1002,7 +869,8 @@ function movepagedown()
     refresh_globals()
     if plen == 0 or cursor == plen - 1 then return end
     local last_file_that_doesnt_scroll = math.ceil(settings.show_amount / 2) - 1
-    local files_to_jump = math.max(last_file_that_doesnt_scroll - cursor, 0) + settings.show_amount - 2
+    local files_to_jump = math.max(last_file_that_doesnt_scroll - cursor, 0) +
+        settings.show_amount - 2
     local prev_cursor = cursor
     cursor = cursor + files_to_jump
 
@@ -1140,8 +1008,8 @@ function playlist(force_dir)
     if force_dir then dir = force_dir end
 
     local files = file_filter(utils.readdir(dir, "files"))
-    if winapisort ~= nil then
-        table.sort(files, winapisort)
+    if win_api_sort ~= nil then
+        table.sort(files, win_api_sort)
     else
         table.sort(files, alphanumsort)
     end
@@ -1178,7 +1046,8 @@ function playlist(force_dir)
             else
                 mp.commandv("loadfile", utils.join_path(dir, file), append_str)
                 msg.info("Prepended to playlist: " .. file)
-                mp.commandv("playlist-move", mp.get_property_number("playlist-count", 1) - 1, c)
+                mp.commandv("playlist-move",
+                            mp.get_property_number("playlist-count", 1) - 1, c)
                 c = c + 1
             end
         end
@@ -1360,12 +1229,14 @@ function save_playlist(filename)
 
     --create save_path if it doesn't exist
     if utils.readdir(save_path) == nil then
-        local windows_args = { "powershell", "-NoProfile", "-Command", "mkdir", save_path }
+        local windows_args = { "powershell", "-NoProfile", "-Command", "mkdir",
+            save_path }
         local unix_args = { "mkdir", save_path }
         local args = settings.system == "windows" and windows_args or unix_args
         local res = utils.subprocess({ args = args, cancellable = false })
         if res and res.status ~= 0 then
-            msg.error("Failed to create playlist save directory " .. save_path .. ". Error: " .. (res.error or "unknown"))
+            msg.error("Failed to create playlist save directory " ..
+                save_path .. ". Error: " .. (res.error or "unknown"))
             return
         end
     end
@@ -1374,7 +1245,8 @@ function save_playlist(filename)
     if name == nil then
         if settings.playlist_save_filename == nil or settings.playlist_save_filename == "" then
             local date = os.date("*t")
-            local date_string = ("%02d-%02d-%02d_%02d-%02d-%02d"):format(date.year, date.month, date.day, date.hour,
+            local date_string = ("%02d-%02d-%02d_%02d-%02d-%02d"):format(
+                date.year, date.month, date.day, date.hour,
                 date.min, date.sec)
 
             name = date_string .. "_playlist-size_" .. length .. ".m3u"
@@ -1386,7 +1258,8 @@ function save_playlist(filename)
     local save_path = utils.join_path(save_path, name)
     local file, err = io.open(save_path, "w")
     if not file then
-        msg.error("Error in creating playlist file, check permissions. Error: " .. (err or "unknown"))
+        msg.error("Error in creating playlist file, check permissions. Error: " ..
+            (err or "unknown"))
     else
         file:write("#EXTM3U\n")
         local i = 0
@@ -1397,7 +1270,8 @@ function save_playlist(filename)
             if not is_protocol(file_name) then
                 full_path = utils.join_path(pwd, file_name) or ""
             end
-            local title = mp.get_property("playlist/" .. i .. "/title") or title_table[file_name]
+            local title = mp.get_property("playlist/" .. i .. "/title") or
+                title_table[file_name]
             if title then
                 file:write("#EXTINF:," .. title .. "\n")
             end
@@ -1414,7 +1288,8 @@ end
 function alphanumsort(a, b)
     local function pad_num(d)
         local dec, n = string.match(d, "(%.?)0*(.+)")
-        return #dec > 0 and ("%.12f"):format(d) or ("%s%03d%s"):format(dec, #n, n)
+        return #dec > 0 and ("%.12f"):format(d) or
+            ("%s%03d%s"):format(dec, #n, n)
     end
     return tostring(a):lower():gsub("%.?%d+", pad_num) .. ("%3d"):format(#b)
         < tostring(b):lower():gsub("%.?%d+", pad_num) .. ("%3d"):format(#a)
@@ -1561,20 +1436,26 @@ end
 function add_keybinds()
     bind_keys_forced(settings.key_move_up, "moveup", moveup, "repeatable")
     bind_keys_forced(settings.key_move_down, "movedown", movedown, "repeatable")
-    bind_keys_forced(settings.key_move_pageup, "movepageup", movepageup, "repeatable")
-    bind_keys_forced(settings.key_move_pagedown, "movepagedown", movepagedown, "repeatable")
-    bind_keys_forced(settings.key_move_begin, "movebegin", movebegin, "repeatable")
+    bind_keys_forced(settings.key_move_pageup, "movepageup", movepageup,
+                     "repeatable")
+    bind_keys_forced(settings.key_move_pagedown, "movepagedown", movepagedown,
+                     "repeatable")
+    bind_keys_forced(settings.key_move_begin, "movebegin", movebegin,
+                     "repeatable")
     bind_keys_forced(settings.key_move_end, "moveend", moveend, "repeatable")
     bind_keys_forced(settings.key_select_file, "selectfile", selectfile)
     bind_keys_forced(settings.key_unselect_file, "unselectfile", unselectfile)
     bind_keys_forced(settings.key_play_file, "playfile", playfile)
-    bind_keys_forced(settings.key_remove_file, "removefile", removefile, "repeatable")
-    bind_keys_forced(settings.key_close_playlist, "close_playlist", remove_keybinds)
+    bind_keys_forced(settings.key_remove_file, "removefile", removefile,
+                     "repeatable")
+    bind_keys_forced(settings.key_close_playlist, "close-playlist",
+                     remove_keybinds)
 end
 
 function remove_keybinds()
     PM_Keybinds_Timer:kill()
-    PM_Keybinds_Timer = mp.add_periodic_timer(settings.playlist_display_timeout, remove_keybinds)
+    PM_Keybinds_Timer = mp.add_periodic_timer(settings.playlist_display_timeout,
+                                              remove_keybinds)
     PM_Keybinds_Timer:kill()
     playlist_overlay.data = ""
     playlist_overlay:remove()
@@ -1596,11 +1477,12 @@ function remove_keybinds()
         unbind_keys(settings.key_unselect_file, "unselectfile")
         unbind_keys(settings.key_play_file, "playfile")
         unbind_keys(settings.key_remove_file, "removefile")
-        unbind_keys(settings.key_close_playlist, "close_playlist")
+        unbind_keys(settings.key_close_playlist, "close-playlist")
     end
 end
 
-PM_Keybinds_Timer = mp.add_periodic_timer(settings.playlist_display_timeout, remove_keybinds)
+PM_Keybinds_Timer = mp.add_periodic_timer(settings.playlist_display_timeout,
+                                          remove_keybinds)
 PM_Keybinds_Timer:kill()
 
 if not settings.dynamic_binds then
@@ -1610,19 +1492,6 @@ end
 if settings.loadfiles_on_idle_start and mp.get_property_number("playlist-count", 0) == 0 then
     playlist()
 end
-
-mp.observe_property("playlist-count", "number", function(_, plcount)
-    --if we promised to listen and sort on playlist size increase do it
-    if settings.sort_playlist_on_file_add and (plcount > plen) then
-        msg.info("Added files will be automatically sorted")
-        refresh_globals()
-        sort_playlist()
-    end
-    refresh_ui()
-    resolve_titles()
-    resolve_metadata()
-end)
-mp.observe_property("osd-dimensions", "native", refresh_ui)
 
 
 url_request_queue = {}
@@ -1646,7 +1515,9 @@ function url_fetching_throttler()
     end
 
     -- start resolving some url titles if there is available slots
-    local amount_to_fetch = math.max(0, settings.concurrent_title_resolve_limit - ongoing_url_requests_count)
+    local amount_to_fetch = math.max(0,
+                                     settings.concurrent_title_resolve_limit -
+                                     ongoing_url_requests_count)
     for index = 1, amount_to_fetch, 1 do
         local file = url_titles_to_fetch.pop()
         if file then
@@ -1667,24 +1538,31 @@ function local_request_queue.pop() return table.remove(local_request_queue, 1) e
 local local_ffprobe_fetch = local_request_queue
 local ongoing_local_request = false
 
-function local_fetching_throttler()
+local function local_fetching_throttler()
     if not ongoing_local_request then
         local item = local_ffprobe_fetch.pop()
-        if not item then return end
+
+        if not item then
+            fetching_data = false
+            mp.commandv('show-text', "Playlist Manager is ready")
+            return
+        end
 
         if item["data_type"] == "title" then
+            fetching_data = true
             ongoing_local_request = true
             resolve_ffprobe_title(item["file"])
         end
 
         if item["data_type"] == "metadata" then
+            fetching_data = true
             ongoing_local_request = true
             resolve_ffprobe_metadata(item["id"], item["file"])
         end
     end
 end
 
-function resolve_metadata()
+local function resolve_metadata()
     if not settings.resolve_playtime_duration and not settings.resolve_video_resolution then return end
 
     local length = mp.get_property_number("playlist-count", 0)
@@ -1711,7 +1589,7 @@ function resolve_metadata()
     end
 end
 
-function resolve_titles()
+local function resolve_titles()
     if settings.prefer_titles == "none" then return end
     if not settings.resolve_url_titles and not settings.resolve_local_titles then return end
 
@@ -1723,11 +1601,11 @@ function resolve_titles()
     for i = 0, length - 1, 1 do
         local filename = mp.get_property("playlist/" .. i .. "/filename")
         local title = mp.get_property("playlist/" .. i .. "/title")
-        if i ~= pos
-            and filename
-            and not title
-            and not title_table[filename]
-            and not requested_titles[filename]
+        if  i ~= pos
+        and filename
+        and not title
+        and not title_table[filename]
+        and not requested_titles[filename]
         then
             requested_titles[filename] = true
             if filename:match("^https?://") and settings.resolve_url_titles then
@@ -1770,23 +1648,29 @@ function resolve_ytdl_title(filename)
         function(success, res)
             ongoing_url_requests[filename] = false
             if res.killed_by_us then
-                msg.verbose("Request to resolve url title " .. filename .. " timed out")
+                msg.verbose("Request to resolve url title " ..
+                    filename .. " timed out")
                 return
             end
             if res.status == 0 then
                 local json, err = utils.parse_json(res.stdout)
                 if not err then
-                    local is_playlist = json["_type"] and json["_type"] == "playlist"
-                    local title = (is_playlist and "[playlist]: " or "") .. json["title"]
+                    local is_playlist = json["_type"] and
+                        json["_type"] == "playlist"
+                    local title = (is_playlist and "[playlist]: " or "") ..
+                        json["title"]
                     msg.verbose(filename .. " resolved to '" .. title .. "'")
                     title_table[filename] = title
-                    mp.set_property_native("user-data/playlist-manager/titles", title_table)
+                    mp.set_property_native("user-data/playlist-manager/titles",
+                                           title_table)
                     refresh_ui()
                 else
-                    msg.error("Failed parsing json, reason: " .. (err or "unknown"))
+                    msg.error("Failed parsing json, reason: " ..
+                        (err or "unknown"))
                 end
             else
-                msg.error("Failed to resolve url title " .. filename .. " Error: " .. (res.error or "unknown"))
+                msg.error("Failed to resolve url title " ..
+                    filename .. " Error: " .. (res.error or "unknown"))
             end
         end
     )
@@ -1801,7 +1685,8 @@ function resolve_ytdl_title(filename)
 end
 
 function resolve_ffprobe_title(filename)
-    local args = { "ffprobe", "-hide_banner", "-show_format", "-show_entries", "format=tags", "-loglevel", "quiet",
+    local args = { "ffprobe", "-hide_banner", "-show_format", "-show_entries",
+        "format=tags", "-loglevel", "quiet",
         filename }
     local req = mp.command_native_async(
         {
@@ -1814,7 +1699,8 @@ function resolve_ffprobe_title(filename)
             ongoing_local_request = false
             local_fetching_throttler()
             if res.killed_by_us then
-                msg.verbose("Request to resolve local title " .. filename .. " timed out")
+                msg.verbose("Request to resolve local title " ..
+                    filename .. " timed out")
                 return
             end
             if res.status == 0 then
@@ -1822,18 +1708,21 @@ function resolve_ffprobe_title(filename)
                 if title then
                     msg.verbose(filename .. " resolved to '" .. title .. "'")
                     title_table[filename] = title
-                    mp.set_property_native("user-data/playlist-manager/titles", title_table)
+                    mp.set_property_native("user-data/playlist-manager/titles",
+                                           title_table)
                     refresh_ui()
                 end
             else
-                msg.error("Failed to resolve local title " .. filename .. " Error: " .. (res.error or "unknown"))
+                msg.error("Failed to resolve local title " ..
+                    filename .. " Error: " .. (res.error or "unknown"))
             end
         end
     )
 end
 
 function resolve_ffprobe_metadata(id, filename)
-    local args = { "ffprobe", "-hide_banner", "-show_entries", "stream=width,height", "-show_entries", "format=duration",
+    local args = { "ffprobe", "-hide_banner", "-show_entries",
+        "stream=width,height", "-show_entries", "format=duration",
         "-sexagesimal", "-loglevel", "error", filename }
     local req = mp.command_native_async(
         {
@@ -1848,7 +1737,8 @@ function resolve_ffprobe_metadata(id, filename)
             local_fetching_throttler()
 
             if res.killed_by_us then
-                msg.error("Request to get duration for " .. filename .. " timed out")
+                msg.error("Request to get duration for " ..
+                    filename .. " timed out")
                 return
             end
 
@@ -1861,7 +1751,10 @@ function resolve_ffprobe_metadata(id, filename)
                 height = tonumber(height and height or 0)
 
                 msg.verbose("Metadata -- Resolution=[" ..
-                    width .. "x" .. height .. "] Duration=[" .. duration .. "] File=[" .. filename .. "]")
+                    width ..
+                    "x" ..
+                    height ..
+                    "] Duration=[" .. duration .. "] File=[" .. filename .. "]")
 
                 -- local width = string.match(res.stdout, "width=([^\n\r.]+)")
                 -- local resolution = string.format("%4sp", height) -- width .. "x" .. height
@@ -1879,9 +1772,14 @@ function resolve_ffprobe_metadata(id, filename)
                     resolution = resolution_labels["uhd"]
                 end
 
+
+
                 metadata_table[filename] = {
                     duration = duration,
-                    resolution = resolution
+                    resolution = string.format(
+                        "%" .. resolution_labels["max_length"] .. "s",
+                        resolution
+                    )
                 }
                 refresh_ui()
 
@@ -1890,7 +1788,8 @@ function resolve_ffprobe_metadata(id, filename)
             end
 
             if res.status ~= 0 then
-                msg.error("ffprobe failed with stderr for " .. filename .. " -- " .. res.stderr)
+                msg.error("ffprobe failed with stderr for " ..
+                    filename .. " -- " .. res.stderr)
                 if string.find(res.stderr, "No such file or directory") ~= nil and settings.remove_file_not_found then
                     if filename == mp.get_property("playlist/" .. id .. "/filename") then
                         mp.commandv("playlist-remove", id)
@@ -1905,10 +1804,80 @@ function resolve_ffprobe_metadata(id, filename)
                 return
             end
 
-            msg.error("Failed to resolve metadata for " .. filename .. " Error: " .. (res.error or "unknown"))
+            msg.error(
+                string.format(
+                    "Failed to resolve metadata for %s Error: %s",
+                    filename,
+                    (res.error or "unknown")
+                )
+            )
         end
     )
 end
+
+function Update_Opts(changelog)
+    msg.verbose("updating options")
+
+    --parse filename json
+    if changelog.filename_replace then
+        if (settings.filename_replace ~= "") then
+            settings.filename_replace = utils.parse_json(settings
+                .filename_replace)
+        else
+            settings.filename_replace = false
+        end
+    end
+
+    -- parse loadfiles json
+    if changelog.loadfiles_filetypes then
+        settings.loadfiles_filetypes = utils.parse_json(settings
+            .loadfiles_filetypes)
+
+        filetype_lookup = {}
+        --create loadfiles set
+        for _, ext in ipairs(settings.loadfiles_filetypes) do
+            filetype_lookup[ext] = true
+        end
+    end
+
+    -- parse resolution labels json
+    if changelog.resolution_labels then
+        settings.resolution_labels = utils.parse_json(settings.resolution_labels)
+
+        local max_length = 0
+        resolution_labels = {}
+        --create loadfiles set
+        for _, item in ipairs(settings.resolution_labels) do
+            resolution_labels[item["id"]] = item["label"]
+            if string.len(item["label"]) > max_length then
+                max_length = string.len(item["label"])
+            end
+        end
+        resolution_labels["max_length"] = max_length
+    end
+
+    if changelog.resolve_url_titles then
+        resolve_titles()
+    end
+
+    if changelog.resolve_local_titles then
+        resolve_titles()
+    end
+
+    if changelog.resolve_playtime_duration or changelog.resolve_video_resolution then
+        resolve_metadata()
+    end
+
+    if changelog.playlist_display_timeout then
+        PM_Keybinds_Timer = mp.add_periodic_timer(
+            settings.playlist_display_timeout, remove_keybinds)
+        PM_Keybinds_Timer:kill()
+    end
+
+    refresh_ui()
+end
+
+Update_Opts({ filename_replace = true, loadfiles_filetypes = true, resolution_labels = true })
 
 --script message handler
 function Handle_Message(msg, value, value2)
@@ -1972,16 +1941,114 @@ function Handle_Message(msg, value, value2)
     if msg == "close" then remove_keybinds() end
 end
 
+----- winapi start -----
+-- in windows system, we can use the sorting function provided by the win32 API
+-- see https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-strcmplogicalw
+local win_api_sort = nil
+if settings.system == "windows" then
+    -- ffiok is false usually means the mpv builds without luajit
+    local ffiok, ffi = pcall(require, "ffi")
+    if ffiok then
+        ffi.cdef [[
+      int MultiByteToWideChar(unsigned int CodePage, unsigned long dwFlags, const char *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
+      int StrCmpLogicalW(const wchar_t * psz1, const wchar_t * psz2);
+    ]]
+
+        local shlwapi = ffi.load("shlwapi.dll")
+
+        function MultiByteToWideChar(MultiByteStr)
+            local UTF8_CODEPAGE = 65001
+            if MultiByteStr then
+                local utf16_len = ffi.C.MultiByteToWideChar(UTF8_CODEPAGE, 0,
+                                                            MultiByteStr, -1, nil,
+                                                            0)
+                if utf16_len > 0 then
+                    local utf16_str = ffi.new("wchar_t[?]", utf16_len)
+                    if ffi.C.MultiByteToWideChar(UTF8_CODEPAGE, 0, MultiByteStr, -1, utf16_str, utf16_len) > 0 then
+                        return utf16_str
+                    end
+                end
+            end
+            return ""
+        end
+
+        win_api_sort = function(a, b)
+            return shlwapi.StrCmpLogicalW(MultiByteToWideChar(a),
+                                          MultiByteToWideChar(b)) < 0
+        end
+    end
+end
+----- winapi end -----
+
+local sort_modes = {
+    {
+        id = "name-asc",
+        title = "name ascending",
+        sort_fn = function(a, b, playlist)
+            if win_api_sort ~= nil then
+                return win_api_sort(playlist[a].string, playlist[b].string)
+            end
+            return alphanumsort(playlist[a].string, playlist[b].string)
+        end,
+    },
+    {
+        id = "name-desc",
+        title = "name descending",
+        sort_fn = function(a, b, playlist)
+            if win_api_sort ~= nil then
+                return win_api_sort(playlist[b].string, playlist[a].string)
+            end
+            return alphanumsort(playlist[b].string, playlist[a].string)
+        end,
+    },
+    {
+        id = "date-asc",
+        title = "date ascending",
+        sort_fn = function(a, b)
+            return (get_file_info(a).mtime or 0) < (get_file_info(b).mtime or 0)
+        end,
+    },
+    {
+        id = "date-desc",
+        title = "date descending",
+        sort_fn = function(a, b)
+            return (get_file_info(a).mtime or 0) > (get_file_info(b).mtime or 0)
+        end,
+    },
+    {
+        id = "size-asc",
+        title = "size ascending",
+        sort_fn = function(a, b)
+            return (get_file_info(a).size or 0) < (get_file_info(b).size or 0)
+        end,
+    },
+    {
+        id = "size-desc",
+        title = "size descending",
+        sort_fn = function(a, b)
+            return (get_file_info(a).size or 0) > (get_file_info(b).size or 0)
+        end,
+    },
+}
+
+local sort_mode = 1
+for mode, sort_data in pairs(sort_modes) do
+    if sort_data.id == settings.default_sort then
+        sort_mode = mode
+    end
+end
+
 mp.register_script_message("playlist-manager", Handle_Message)
 
 bind_keys(settings.key_sort_playlist, "sort_playlist", sort_playlist_by_next_mode)
 bind_keys(settings.key_shuffle_playlist, "shuffle_playlist", shuffle_playlist)
 bind_keys(settings.key_reverse_playlist, "reverse_playlist", reverse_playlist)
 bind_keys(settings.key_loadfiles, "loadfiles", playlist)
-bind_keys(settings.key_saveplaylist, "saveplaylist", activate_playlist_save_prompt)
+bind_keys(settings.key_saveplaylist, "saveplaylist",
+          activate_playlist_save_prompt)
 bind_keys(settings.key_selectplaylist, "selectplaylist", select_playlist)
 bind_keys(settings.key_open_menu, "openmenu", open_menu)
-bind_keys(settings.key_show_playlist, "Show_Playlist", Show_Playlist)
+bind_keys(settings.key_show_playlist, "show-playlist", Show_Playlist)
 bind_keys(
     settings.key_peek_at_playlist,
     "peek_at_playlist",
@@ -2011,7 +2078,7 @@ function On_File_Loaded()
         title_table[path] = media_title
     end
 
-    stripped_name = Strip_Filename(mp.get_property("media-title"))
+    stripped_name = strip_filename(mp.get_property("media-title"))
     if settings.show_title_on_file_load then
         mp.commandv("show-text", stripped_name)
     end
@@ -2019,7 +2086,9 @@ function On_File_Loaded()
         Show_Playlist()
     end
     if settings.set_title_stripped then
-        mp.set_property("title", settings.title_prefix .. stripped_name .. settings.title_suffix)
+        mp.set_property("title",
+                        settings.title_prefix ..
+                        stripped_name .. settings.title_suffix)
     end
     resolve_metadata()
 end
@@ -2064,6 +2133,19 @@ function On_End_File(event)
     directory = nil
     filename = nil
 end
+
+mp.observe_property("playlist-count", "number", function(_, playlist_count)
+    --if we promised to listen and sort on playlist size increase do it
+    if settings.sort_playlist_on_file_add and (playlist_count > plen) then
+        msg.info("Added files will be automatically sorted")
+        refresh_globals()
+        sort_playlist()
+    end
+    refresh_ui()
+    resolve_titles()
+    resolve_metadata()
+end)
+mp.observe_property("osd-dimensions", "native", refresh_ui)
 
 mp.register_event("start-file", On_Start_File)
 mp.register_event("file-loaded", On_File_Loaded)

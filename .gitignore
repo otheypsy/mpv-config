@@ -1,6 +1,145 @@
-*.log
-.vscode
+## Source :: https://gitignore.io | https://www.toptal.com/developers/gitignore/
+## Create :: https://www.toptal.com/developers/gitignore/api/windows,git,powershell,visualstudiocode,zsh
+## Edit   :: https://www.toptal.com/developers/gitignore?templates=windows,git,powershell,visualstudiocode,zsh
 
+#############
+#### Git ####
+#############
+
+# Created by git for backups. To disable backups in Git:
+# $ git config --global mergetool.keepBackup false
+*.orig
+
+# Created by git when using merge tools for conflicts
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+*_BACKUP_*.txt
+*_BASE_*.txt
+*_LOCAL_*.txt
+*_REMOTE_*.txt
+
+##################
+#### Terminal ####
+##################
+
+# Exclude packaged modules
+*.zip
+
+# Themes
+.oh-my-zsh/*
+!.oh-my-zsh/custom/themes/otheypsy.zsh-theme
+.oh-my-posh/*
+!.oh-my-posh/themes/otheypsy.omp.json
+
+# Exclude .NET assemblies from source
+*.dll
+
+
+# Zsh compiled script + zrecompile backup
+*.zwc
+*.zwc.old
+
+# Zsh completion-optimization dumpfile
+*zcompdump*
+
+# Zsh history
+.zsh_history
+
+# Zsh sessions
+.zsh_sessions
+
+# Zsh zcalc history
+.zcalc_history
+
+# A popular plugin manager's files
+._zinit
+.zinit_lstupd
+
+# zdharma/zshelldoc tool's files
+zsdoc/data
+
+# robbyrussell/oh-my-zsh/plugins/per-directory-history plugin's files
+# (when set-up to store the history in the local directory)
+.directory_history
+
+# MichaelAquilina/zsh-autoswitch-virtualenv plugin's files
+# (for Zsh plugins using Python)
+.venv
+
+# Zunit tests' output
+/tests/_output/*
+!/tests/_output/.gitkeep
+
+
+##########################
+#### VisualStudioCode ####
+##########################
+
+# Core workspace files
+.vscode
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local history of files
+.history/
+.ionide
+
+# Built extensions
+*.vsix
+
+# Logs
+logs
+*.log
+
+
+#################
+#### Windows ####
+#################
+
+# Windows thumbnail cache files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Dump file
+*.stackdump
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+#############
+#### MPV ####
+#############
+
+!scripts/display-info.dll
+screenshots
+cache
 playlists
 inactive
 settings.xml
+*.m3u
+*.mp4
+*.mpv
+*.jpeg
+*.jpg
+
+# End of https://www.toptal.com/developers/gitignore/api/windows,git,powershell,visualstudiocode,zsh
