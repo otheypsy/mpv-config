@@ -1,6 +1,7 @@
 -- Note: anything global is accessible by profile condition expressions.
 
 local msg = require "mp.msg"
+local utils = require "mp.utils"
 
 local profiles
 local watched_properties = {}     -- indexed by property name (used as a set)
@@ -56,17 +57,15 @@ end
 
 local function display_profiles()
     local active_profiles = {}
-    local osd_text =
-    "{\\an3}{\\fs8}{\\opaque1}{\\3c&111111&}{\\3a&H66}{\\bord0.5}{\\be1}{\\1c&E6E2DE&}"
     for _, profile in ipairs(profiles) do
         if profile.status == true then
-            table.insert(active_profiles, profile.name)
-            osd_text = osd_text .. " [" .. profile.name .. "]"
+            active_profiles[#active_profiles+1] = profile.name
         end
     end
-    mp.set_property_native("user-data/custom_auto_profiles/active_profiles",
-        active_profiles)
-    mp.set_osd_ass(0, 0, osd_text)
+    mp.set_property_native(
+        "user-data/custom_auto_profiles/active_profiles",
+        active_profiles
+    )
 end
 
 local function on_property_change(name, val)
@@ -202,7 +201,7 @@ local function load_profiles(profiles_property)
                 status = nil,
                 dirty = true, -- need re-evaluate
                 has_restore_opt = v["profile-restore"] and
-                v["profile-restore"] ~= "default"
+                    v["profile-restore"] ~= "default"
             }
             profiles[#profiles+1] = profile
             have_dirty_profiles = true
@@ -226,6 +225,8 @@ mp.observe_property("profile-list", "native", function(_, profiles_property)
 
     on_idle() -- re-evaluate all profiles immediately
 end)
+
+mp.observe_property("osd-dimensions", "native", display_profiles)
 
 mp.register_idle(on_idle)
 for _, name in ipairs({ "on_load", "on_preloaded", "on_loaded", "on_before_start_file" }) do

@@ -12,6 +12,30 @@ local backdrop_overlay = mp.create_osd_overlay("ass-events")
 local console_open = false
 local stats_open = false
 
+local function toggle_playlist(enable)
+    mp.commandv("script-message-to", "playlist_manager", "close-playlist")
+end
+
+local function toggle_osc(enable)
+    local visibility_mode = enable and "auto" or "never"
+    mp.commandv(
+        "script-message",
+        "modernz",
+        "osc-visibility",
+        visibility_mode,
+        "true"
+    )
+end
+
+local function toggle_footer(enable)
+    local toggle_value = enable and "show" or "hide"
+    mp.commandv(
+        "script-message",
+        "custom-features",
+        "toggle-footer",
+        toggle_value
+    )
+end
 
 local function draw_backdrop()
     local ass = assdraw.ass_new()
@@ -36,15 +60,19 @@ end
 
 local function handle_backdrop()
     if console_open or stats_open then
+        toggle_playlist(false)
+        toggle_osc(false)
+        toggle_footer(false)
         draw_backdrop()
     else
+        toggle_osc(true)
+        toggle_footer(true)
         clear_backdrop()
     end
 end
 
 local function on_console_change(_, value)
     console_open = value
-    mp.commandv("script-binding", "playlist_manager/close-playlist")
     if console_open and stats_open then
         mp.commandv("script-binding", "stats/display-stats-toggle")
     end
@@ -53,7 +81,6 @@ end
 
 local function on_stats_change(_, value)
     stats_open = value
-    mp.commandv("script-binding", "playlist_manager/close-playlist")
     handle_backdrop()
 end
 
