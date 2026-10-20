@@ -128,10 +128,10 @@ local ass_stop = mp.get_property_osd("osd-ass-cc/1")
 -- Ring buffers for the values used to construct a graph.
 -- .pos denotes the current position, .len the buffer length
 -- .max is the max value in the corresponding buffer
-local vsratio_buf, vsjitter_buf
+local vs_ratio_buf, vs_jitter_buf
 local function init_buffers()
-    vsratio_buf = { 0, pos = 1, len = 50, max = 0 }
-    vsjitter_buf = { 0, pos = 1, len = 50, max = 0 }
+    vs_ratio_buf = { 0, pos = 1, len = 50, max = 0 }
+    vs_jitter_buf = { 0, pos = 1, len = 50, max = 0 }
 end
 local cache_ahead_buf, cache_speed_buf
 local perf_buffers = {}
@@ -374,7 +374,7 @@ end
 --          for this property. Specifying this will replace empty string as
 --          default invalid value (nil is always invalid).
 -- cached : If true, use get_property_cached instead of get_property_osd
-local function append_property(s, prop, attr, excluded, cached)
+local function append_property(s, prop, attr, excluded, cached, prop_char_count)
     excluded = excluded or { [""] = true }
     local ret
     if cached then
@@ -382,6 +382,7 @@ local function append_property(s, prop, attr, excluded, cached)
     else
         ret = mp.get_property_osd(prop)
     end
+    ret = format("%" .. (prop_char_count or "") .. "s", ret)
     if not ret or excluded[ret] then
         if o.debug then
             print("No value for property: " .. prop)
@@ -475,8 +476,8 @@ local function append_perfdata(header, s, dedicated_page)
         h[#h+1] = format("{\\1c&H%s&}{\\b1}", o.font_highlight_color)
         h[#h+1] = format("%s", "Frame Timings: ")
         h[#h] = h[#h] .. format(
-            "%s%s%s%s%s %s    %s    %s %s%s%s %s{\\b0}",
-            o.indent, o.indent, o.indent, o.indent, o.indent,
+            "%s%s%s%s%s %s    %s    %s %s%s%s  %s{\\b0}",
+            o.indent, o.indent, o.indent, o.indent, o.prefix_sep,
             "last", "avg", "peak",
             o.indent, o.indent, o.prefix_sep,
             scroll_hint()
@@ -484,7 +485,7 @@ local function append_perfdata(header, s, dedicated_page)
         h[#h+1] = format(
             "%s%s%s%s%s%s%s%s%s  {\\fs%s}%s    %s    %s{\\fs%s}",
             o.nl, o.indent, o.indent,
-            o.indent, o.indent, o.indent, o.indent, o.indent, o.prefix_sep,
+            o.indent, o.indent, o.indent, o.indent, o.prefix_sep, o.prefix_sep,
             font_size * 0.8,
             "--\u{33b2}--", "--\u{33b2}--", "--\u{33b2}--",
             font_size
@@ -521,7 +522,7 @@ local function append_perfdata(header, s, dedicated_page)
                         math.min(240, pass["count"]),
                         pass["peak"],
                         pass["avg"],
-                        0.8, 0.20, 240
+                        0.8, 0.2, 240
                     )
                 end
 
@@ -542,16 +543,17 @@ local function append_perfdata(header, s, dedicated_page)
             s[#s+1] = format(
                 "%s%s%s%s%s%s%s%s%s  %s   %s   %s",
                 o.nl, o.indent, o.indent,
-                o.indent, o.indent, o.indent, o.indent, o.indent, o.prefix_sep,
+                o.indent, o.indent, o.indent, o.indent, o.prefix_sep,
+                o.prefix_sep,
                 "-----", "-----", "-----"
             )
 
             -- Print sum of timing values as "Total"
             s[#s+1] = format(
-                "%s%s%s%s%s%s%s%s %s |  %s | %s",
-                o.nl, o.indent, o.indent, o.indent, o.indent, o.indent,
+                "%s%s%s%s%s%s%s%s  %s | %s | %s",
+                o.nl, o.indent, o.indent, o.indent, o.indent, o.prefix_sep,
                 o.prefix_sep,
-                bold("Total \u{279C}  "),
+                bold("Total  \u{279C} "),
                 bold(pp(last_s[frame])),
                 bold(pp(avg_s[frame])),
                 bold(pp(peak_s[frame]))
@@ -752,10 +754,191 @@ local function get_kbinfo_lines()
     return info_lines
 end
 
+local function split(str, delimiter)
+    local result = {}
+    for value in string.gmatch(str, "([^" .. delimiter .. "]+)") do
+        result[#result+1] = value
+    end
+    return result
+end
+
+local function recursive_append_general_perfdata(s, data, level, pad)
+    local filler = "\u{2504}"
+    for key, item in pairs(data) do
+        append(
+            s,
+            key .. string.rep(filler, pad[level + 1] - key:len()),
+            {
+                prefix = (level == 0) and "" or "\u{2506}" .. filler .. filler,
+                prefix_sep = " ",
+                nl = o.nl,
+                indent = o.indent ..
+                    string.rep(o.prefix_sep .. "  ", level + 1),
+                no_prefix_markup = (level ~= 0),
+                no_bold = (level ~= 0),
+                second_highlight = false
+            }
+        )
+        if item.text or item.value then
+            append(
+                s, " \u{2504}\u{2504} ",
+                {
+                    prefix = format("%20s", (item.text or item.value)),
+                    prefix_sep = "",
+                    nl = "",
+                    indent = o.prefix_sep,
+                    no_prefix_markup = true,
+                    no_bold = true,
+                    second_highlight = false
+                }
+            )
+
+            if o.plot_perfdata and o.use_ass and item.value then
+                local buf = perf_buffers[item.name]
+                if not buf then
+                    buf = { 0, pos = 1, len = 50, max = 0 }
+                    perf_buffers[item.name] = buf
+                end
+                graph_add_value(buf, item.value)
+                s[#s] = s[#s] ..
+                    generate_graph(
+                        buf, buf.pos, buf.len, buf.max,
+                        nil, 0.8, 1, 50
+                    )
+            end
+        else
+            recursive_append_general_perfdata(s, item, level + 1, pad)
+        end
+    end
+
+    s[#s+1] = o.nl
+end
+
+local final = {}
+local pad = { 0, 0, 0, 0 }
 local function append_general_perfdata(s)
-    for i, data in ipairs(mp.get_property_native("perf-info") or {}) do
-        append(s, data.text or data.value,
-               { prefix = "[" .. tostring(i) .. "] " .. data.name .. ":" })
+    local perf_data = mp.get_property_native("perf-info") or {}
+
+    for _, data in ipairs(perf_data) do
+        local name = split(data.name, "/")
+
+        for index in ipairs(name) do
+            if index == 1 then
+                if not final[name[1]] then
+                    if name[1]:len() > pad[1] then
+                        pad[1] = name[1]:len()
+                    end
+                    final[name[1]] = {}
+                end
+
+                if index == #name then
+                    final[name[1]] = {
+                        [name[1]] = {
+                            name = data.name,
+                            text = data.text,
+                            value = data.value
+                        }
+                    }
+                end
+            end
+
+            if index == 2 then
+                if  final[name[1]]
+                and not final[name[1]][name[2]]
+                then
+                    if name[2]:len() > pad[2] then
+                        pad[2] = name[2]:len()
+                    end
+                    final[name[1]][name[2]] = {}
+                end
+                if index == #name then
+                    final[name[1]][name[2]] = {
+                        name = data.name,
+                        text = data.text,
+                        value = data.value
+                    }
+                end
+            end
+
+            if index == 3 then
+                if  final[name[1]]
+                and final[name[1]][name[2]]
+                and not final[name[1]][name[2]][name[3]]
+                then
+                    if name[3]:len() > pad[3] then
+                        pad[3] = name[3]:len()
+                    end
+                    final[name[1]][name[2]][name[3]] = {}
+                end
+                if index == #name then
+                    final[name[1]][name[2]][name[3]] = {
+                        name = data.name,
+                        text = data.text,
+                        value = data.value
+                    }
+                end
+            end
+
+            if index >= 4 then
+                if  final[name[1]]
+                and final[name[1]][name[2]]
+                and not final[name[1]][name[2]][name[3]][name[4]]
+                then
+                    if name[4]:len() > pad[4] then
+                        pad[4] = name[4]:len()
+                    end
+                    final[name[1]][name[2]][name[3]][name[4]] = {}
+                end
+                if index == #name then
+                    final[name[1]][name[2]][name[3]][name[4]] = {
+                        name = data.name,
+                        text = data.text,
+                        value = data.value
+                    }
+                end
+            end
+        end
+    end
+
+    for index, data in ipairs(perf_data) do
+        append(
+            s, format("\u{22EE} %20s \u{22EE}", (data.text or data.value)),
+            {
+                prefix = format(" %2s ", tostring(index)),
+                prefix_sep = "",
+                nl = o.nl,
+                indent = "",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
+
+        local name = split(data.name, "/")
+        local label = "  "
+        local fill_len = 0
+        for i = 1, 4 do
+            if name[i] then
+                fill_len = pad[i] + 2 - name[i]:len()
+                label = label .. name[i]
+            else
+                fill_len = pad[i] + 2
+            end
+            label = label .. " " .. string.rep("\u{2504}", fill_len) .. " "
+        end
+
+        append(
+            s, label,
+            {
+                prefix = "",
+                prefix_sep = "",
+                nl = "",
+                indent = "",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
 
         if o.plot_perfdata and o.use_ass and data.value then
             local buf = perf_buffers[data.name]
@@ -765,9 +948,12 @@ local function append_general_perfdata(s)
             end
             graph_add_value(buf, data.value)
             s[#s] = s[#s] ..
-                generate_graph(buf, buf.pos, buf.len, buf.max, nil, 0.8, 1)
+                generate_graph(buf, buf.pos, buf.len, buf.max, nil, 0.8, 1, 50)
         end
     end
+    s[#s+1] = o.nl
+    s[#s+1] = o.nl
+    recursive_append_general_perfdata(s, final, 0, pad)
 end
 
 local function append_display_sync(s)
@@ -834,84 +1020,137 @@ local function append_display_sync(s)
         local ratio_graph = ""
         local jitter_graph = ""
         if o.plot_vsync_ratio then
-            ratio_graph = generate_graph(vsratio_buf, vsratio_buf.pos,
-                                         vsratio_buf.len, vsratio_buf.max, nil,
-                                         0.8, 1)
-            ratio_graph_full = generate_graph(vsratio_buf, vsratio_buf.pos,
-                                              vsratio_buf.len, vsratio_buf.max,
-                                              nil, 0.8, 1)
+            ratio_graph = generate_graph(
+                vs_ratio_buf,
+                vs_ratio_buf.pos,
+                vs_ratio_buf.len,
+                vs_ratio_buf.max,
+                nil,
+                0.8,
+                1,
+                50
+            )
         end
         if o.plot_vsync_jitter then
-            jitter_graph = generate_graph(vsjitter_buf, vsjitter_buf.pos,
-                                          vsjitter_buf.len, vsjitter_buf.max, nil,
-                                          0.8, 1)
+            jitter_graph = generate_graph(
+                vs_jitter_buf,
+                vs_jitter_buf.pos,
+                vs_jitter_buf.len,
+                vs_jitter_buf.max,
+                nil,
+                0.8,
+                1,
+                50
+            )
         end
-        append_property(s, "vsync-ratio", {
-            prefix = "VSync Ratio:",
-            suffix = ratio_graph .. 'Test' .. ratio_graph_full,
-            no_prefix_markup = true,
-            no_bold = true,
-            second_highlight = false
-        })
-        append_property(s, "vsync-jitter", {
-            prefix = "VSync Jitter:",
-            suffix = o.prefix_sep .. jitter_graph,
-            no_prefix_markup = true,
-            no_bold = true,
-            second_highlight = false
-        })
+        append_property(
+            s, "vsync-ratio",
+            {
+                prefix = format("%-12s:", "VSync Ratio"),
+                prefix_sep = " ",
+                suffix = ratio_graph,
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            },
+            nil,
+            false,
+            8
+        )
+        append_property(
+            s, "vsync-jitter",
+            {
+                prefix = format("%-12s:", "VSync Jitter"),
+                prefix_sep = " ",
+                suffix = jitter_graph,
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            },
+            nil,
+            false,
+            8
+        )
     else
         -- Since no graph is needed we can print ratio/jitter on the same line and save some space
-        local vr = append_property(s, "vsync-ratio", { prefix = "VSync Ratio:" })
-        append_property(s, "vsync-jitter", {
-            prefix = "VSync Jitter:",
-            nl = vr and "" or o.nl,
-            indent = vr and o.prefix_sep .. o.prefix_sep,
-            no_prefix_markup = true,
-            no_bold = true,
-            second_highlight = false
-        })
+        local vr = append_property(
+            s, "vsync-ratio",
+            {
+                prefix = "VSync Ratio:"
+            }
+        )
+        append_property(
+            s, "vsync-jitter",
+            {
+                prefix = "VSync Jitter:",
+                nl = vr and "" or o.nl,
+                indent = vr and o.prefix_sep .. o.prefix_sep,
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
     end
 end
 
 
 local function append_filters(s, prop, prefix)
-    local length = 0
-    local filters = {}
+    s[#s+1] = o.nl .. o.indent .. prefix
 
     for _, f in ipairs(mp.get_property_native(prop) or {}) do
-        local n = f.name
+        local name = f.name
         if f.enabled ~= nil and not f.enabled then
-            n = n .. " (disabled)"
+            name = name .. " (disabled)"
         end
 
         if f.label ~= nil then
-            n = "@" .. f.label .. ": " .. n
+            name = "@" .. f.label .. ": " .. name
         end
 
-        local p = {}
-        local ps = ""
+        append(
+            s, name,
+            {
+                prefix = "",
+                nl = o.nl,
+                indent = o.indent .. o.indent,
+                no_prefix_markup = true,
+                no_bold = false,
+                second_highlight = true
+            }
+        )
+
         for _, key in ipairs(sorted_keys(f.params)) do
-            p[#p+1] = key .. "=" .. f.params[key]
+            for _, item in ipairs(split(f.params[key], ":") or {}) do
+                local entry_1 = split(item, ";") or {}
+                if #entry_1 == 1 then
+                    append(
+                        s, item or " ",
+                        {
+                            prefix = "",
+                            nl = o.nl,
+                            indent = o.indent .. o.indent .. o.indent,
+                            no_prefix_markup = true,
+                            no_bold = true,
+                            second_highlight = false
+                        }
+                    )
+                else
+                    for i, entry_2 in ipairs(entry_1) do
+                        append(
+                            s, entry_2,
+                            {
+                                prefix = (i ~= 1) and o.indent,
+                                nl = o.nl,
+                                indent = o.indent .. o.indent .. o.indent,
+                                no_prefix_markup = true,
+                                no_bold = true,
+                                second_highlight = false
+                            }
+                        )
+                    end
+                end
+            end
         end
-        if #p > 0 then
-            ps = " [" .. table.concat(p, " ") .. "]"
-        else
-            ps = ""
-        end
-
-        length = length + n:len() + ps:len()
-        filters[#filters+1] = no_ASS(n) .. it(no_ASS(ps))
-    end
-    if #filters > 0 then
-        local ret
-        if length < o.filter_params_max_length then
-            ret = table.concat(filters, ", ")
-        else
-            local sep = o.nl .. o.indent .. o.indent
-            ret = sep .. table.concat(filters, sep)
-        end
-        s[#s+1] = o.nl .. o.indent .. bold(prefix) .. o.prefix_sep .. ret
     end
 end
 
@@ -962,8 +1201,10 @@ local function add_profiles(s)
                 append(
                     s, profiles[sub_profile]["profile-desc"],
                     {
-                        prefix = format(" \u{21AA}  " .. template,
-                                        profiles[sub_profile]["name"]),
+                        prefix = format(
+                            " \u{21AA}  " .. template,
+                            profiles[sub_profile]["name"]
+                        ),
                         prefix_sep = "   : ",
                         nl = o.nl,
                         indent = o.indent,
@@ -974,6 +1215,50 @@ local function add_profiles(s)
                 )
             end
         end
+    end
+end
+
+
+local function add_versions(s)
+    local versions = {
+        {
+            label = "mpv",
+            version = mp.get_property_native("mpv-version") or ""
+        },
+        {
+            label = "ffmpeg",
+            version = mp.get_property_native("ffmpeg-version") or ""
+        },
+        {
+            label = "libass",
+            version = mp.get_property_native("libass-version") or ""
+        },
+        {
+            label = "libplacebo",
+            version = mp.get_property_native("libplacebo-version") or ""
+        },
+    }
+
+    append(s, "",
+           {
+               prefix = "Version Info:",
+               indent = "",
+               nl = o.nl
+           }
+    )
+
+    for _, item in ipairs(versions) do
+        append(
+            s, item["version"],
+            {
+                prefix = format("%-11s:", item["label"]),
+                prefix_sep = " ",
+                nl = o.nl,
+                indent = o.indent,
+                no_prefix_markup = true,
+                no_bold = true
+            }
+        )
     end
 end
 
@@ -988,9 +1273,9 @@ local function add_displays(s)
     )
     ]] --
 
-    local display_list_json = mp.get_property_native(
-        "user-data/display-list/full")
-    local display_list = utils.parse_json(display_list_json)
+    local display_list = utils.parse_json(
+        mp.get_property_native("user-data/display-list/full") or ""
+    )
 
     for _, display in ipairs(display_list) do
         local is_inactive = true
@@ -1621,11 +1906,14 @@ local function append_img_params(s, r, ro)
     r["prim-green-x"] or r["prim-green-y"] or
     r["prim-blue-x"] or r["prim-blue-y"] or
     r["prim-white-x"] or r["prim-white-y"] then
-        append(s, string.format("[%.3f %.3f, %.3f %.3f, %.3f %.3f, %.3f %.3f]",
-                                r["prim-red-x"] or 0, r["prim-red-y"] or 0,
-                                r["prim-green-x"] or 0, r["prim-green-y"] or 0,
-                                r["prim-blue-x"] or 0, r["prim-blue-y"] or 0,
-                                r["prim-white-x"] or 0, r["prim-white-y"] or 0),
+        append(s,
+               string.format(
+                   "[%.3f %.3f, %.3f %.3f, %.3f %.3f, %.3f %.3f]",
+                   r["prim-red-x"] or 0, r["prim-red-y"] or 0,
+                   r["prim-green-x"] or 0, r["prim-green-y"] or 0,
+                   r["prim-blue-x"] or 0, r["prim-blue-y"] or 0,
+                   r["prim-white-x"] or 0, r["prim-white-y"] or 0
+               ),
                {
                    prefix = "Primaries:",
                    nl = "",
@@ -1635,36 +1923,41 @@ local function append_img_params(s, r, ro)
                    second_highlight = false
                }
         )
-        append(s, r["primaries"], {
-            prefix = "in",
+        append(
+            s, r["primaries"],
+            {
+                prefix = "in",
+                nl = "",
+                indent = " ",
+                prefix_sep = " ",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
+    else
+        append(
+            s, r["primaries"],
+            {
+                prefix = "Primaries:",
+                nl = "",
+                indent = indent,
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
+    end
+    append(
+        s, r["gamma"],
+        {
+            prefix = "Transfer:",
             nl = "",
-            indent = " ",
-            prefix_sep = " ",
+            indent = indent,
             no_prefix_markup = true,
             no_bold = true,
             second_highlight = false
-        })
-    else
-        append(s, r["primaries"],
-               {
-                   prefix = "Primaries:",
-                   nl = "",
-                   indent = indent,
-                   no_prefix_markup = true,
-                   no_bold = true,
-                   second_highlight = false
-               }
-        )
-    end
-    append(s, r["gamma"],
-           {
-               prefix = "Transfer:",
-               nl = "",
-               indent = indent,
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+        }
     )
 end
 
@@ -1680,14 +1973,15 @@ local function append_fps(s, prop, eprop)
     local nl = o.nl
     local indent = o.indent
 
-    if fps ~= "" and append(s, fps,
-                            {
-                                prefix = prefix,
-                                suffix = unit .. suffix,
-                                no_prefix_markup = true,
-                                no_bold = true,
-                                second_highlight = false
-                            }
+    if fps ~= "" and append(
+        s, fps,
+        {
+            prefix = prefix,
+            suffix = unit .. suffix,
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     ) then
         prefix = ""
         nl = ""
@@ -1714,33 +2008,56 @@ local function add_video_out(s)
         return
     end
 
-    append(s, "",
-           {
-               prefix = "Video Out:",
-               nl = o.nl,
-               indent = ""
-           }
+    append(
+        s, "",
+        {
+            prefix = "Video Out:",
+            nl = o.nl,
+            indent = ""
+        }
     )
-    append(s, vo,
-           {
-               prefix = "Driver:",
-               prefix_sep = " ",
-               nl = o.nl,
-               no_prefix_markup = true,
-               no_bold = false,
-               second_highlight = true
-           }
+    append(
+        s, vo,
+        {
+            prefix = "Driver:",
+            prefix_sep = " ",
+            nl = o.nl,
+            no_prefix_markup = true,
+            no_bold = false,
+            second_highlight = true
+        }
     )
-    append(s, mp.get_property_native("current-gpu-context"),
-           {
-               prefix = "Context:",
-               prefix_sep = " ",
-               nl = "",
-               indent = o.prefix_sep .. o.prefix_sep,
-               no_prefix_markup = true,
-               no_bold = false,
-               second_highlight = true
-           }
+    append(
+        s, mp.get_property_native("current-gpu-context"),
+        {
+            prefix = "Context:",
+            prefix_sep = " ",
+            nl = "",
+            indent = o.prefix_sep .. o.prefix_sep,
+            no_prefix_markup = true,
+            no_bold = false,
+            second_highlight = true
+        }
+    )
+
+    local gpu_apis = mp.get_property_native("gpu-api") or {}
+    local gpu_api = ""
+    for _, entry in ipairs(gpu_apis) do
+        if entry["enabled"] then
+            gpu_api = gpu_api .. entry["name"] .. " "
+        end
+    end
+    append(
+        s, gpu_api,
+        {
+            prefix = "Api:",
+            prefix_sep = " ",
+            nl = "",
+            indent = o.prefix_sep .. o.prefix_sep,
+            no_prefix_markup = true,
+            no_bold = false,
+            second_highlight = true
+        }
     )
 
     local scale = nil
@@ -1748,7 +2065,7 @@ local function add_video_out(s)
         scale = get_property_cached("current-window-scale")
     end
 
-    local od = mp.get_property_native("osd-dimensions")
+    local od = mp.get_property_native("osd-dimensions") or {}
     local rt = mp.get_property_native("video-target-params")
     local r = rt or {}
 
@@ -1770,47 +2087,51 @@ local function add_video_out(s)
     append_hdr(s, r, true)
 
     append_fps(s, "display-fps", "estimated-display-fps")
-    if append_property(s, "decoder-frame-drop-count",
-                       {
-                           prefix = "Dropped Frames:",
-                           suffix = " (decoder)",
-                           no_prefix_markup = true,
-                           no_bold = true,
-                           second_highlight = false
-                       }
+    if append_property(
+        s, "decoder-frame-drop-count",
+        {
+            prefix = "Dropped Frames:",
+            suffix = " (decoder)",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     ) then
-        append_property(s, "frame-drop-count",
-                        {
-                            suffix = " (output)",
-                            nl = "",
-                            indent = "",
-                            no_prefix_markup = true,
-                            no_bold = true,
-                            second_highlight = false
-                        }
+        append_property(
+            s, "frame-drop-count",
+            {
+                suffix = " (output)",
+                nl = "",
+                indent = "",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
         )
     end
     append_display_sync(s)
     -- append_perfdata(nil, s, false)
 
     if mp.get_property_native("deinterlace-active") then
-        append_property(s, "deinterlace",
-                        {
-                            prefix = "Deinterlacing:",
-                            no_prefix_markup = true,
-                            no_bold = true,
-                            second_highlight = false
-                        }
+        append_property(
+            s, "deinterlace",
+            {
+                prefix = "Deinterlacing:",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
         )
     end
-    append_property(s, "avsync",
-                    {
-                        prefix = "A-V:",
-                        prefix_sep = " ",
-                        no_prefix_markup = true,
-                        no_bold = true,
-                        second_highlight = false
-                    }
+    append_property(
+        s, "avsync",
+        {
+            prefix = "A-V Sync:",
+            prefix_sep = " ",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
 end
 
@@ -1838,67 +2159,74 @@ local function add_video(s)
                second_highlight = false
            }
     )
-    if track and append(s, track["codec-desc"],
-                        {
-                            prefix = "Codec:",
-                            prefix_sep = " ",
-                            nl = o.nl,
-                            no_prefix_markup = true,
-                            no_bold = true,
-                            second_highlight = false
-                        }
+    if track and append(
+        s, track["codec-desc"],
+        {
+            prefix = "Codec:",
+            prefix_sep = " ",
+            nl = o.nl,
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     ) then
-        append(s, track["codec-profile"],
-               {
-                   prefix = "[",
-                   nl = "",
-                   indent = " ",
-                   prefix_sep = "",
-                   suffix = "]",
-                   no_prefix_markup = true,
-                   no_bold = true,
-                   second_highlight = false
-               }
+        append(
+            s, track["codec-profile"],
+            {
+                prefix = "[",
+                nl = "",
+                indent = " ",
+                prefix_sep = "",
+                suffix = "]",
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
         )
         if track["codec"] ~= track["decoder"] then
-            append(s, track["decoder"],
-                   {
-                       prefix = "[",
-                       nl = "",
-                       indent = " ",
-                       prefix_sep = "",
-                       suffix = "]",
-                       no_prefix_markup = true,
-                       no_bold = true,
-                       second_highlight = false
-                   }
+            append(
+                s, track["decoder"],
+                {
+                    prefix = "[",
+                    nl = "",
+                    indent = " ",
+                    prefix_sep = "",
+                    suffix = "]",
+                    no_prefix_markup = true,
+                    no_bold = true,
+                    second_highlight = false
+                }
             )
         end
-        append_property(s, "hwdec-current",
-                        {
-                            prefix = "HW Decoder:",
-                            suffix = "",
-                            nl = o.nl,
-                            no_prefix_markup = false,
-                            no_bold = false,
-                            second_highlight = true
-                        },
-                        {
-                            no = true,
-                            [""] = true
-                        }, true
+        append_property(
+            s, "hwdec-current",
+            {
+                prefix = "HW Decoder:",
+                suffix = "",
+                nl = o.nl,
+                no_prefix_markup = false,
+                no_bold = false,
+                second_highlight = true
+            },
+            {
+                no = true,
+                [""] = true
+            }, true
         )
     end
     append_img_params(s, r, ro)
     local has_prefix = false
     if o.show_frame_info then
         if append_property(s, "estimated-frame-number", { prefix = "Frame:" }) then
-            append_property(s, "estimated-frame-count", {
-                indent = " / ",
-                nl = "",
-                prefix_sep = "",
-                no_prefix_markup = true
-            })
+            append_property(
+                s, "estimated-frame-count",
+                {
+                    indent = " / ",
+                    nl = "",
+                    prefix_sep = "",
+                    no_prefix_markup = true
+                }
+            )
             has_prefix = true
         end
         local frame_info = mp.get_property_native("video-frame-info")
@@ -1946,13 +2274,14 @@ local function add_video(s)
         append_fps(s, "container-fps", "estimated-vf-fps")
     end
     append_hdr(s, ro)
-    append_property(s, "video-bitrate",
-                    {
-                        prefix = "Bitrate:",
-                        no_prefix_markup = true,
-                        no_bold = true,
-                        second_highlight = false
-                    }
+    append_property(
+        s, "video-bitrate",
+        {
+            prefix = "Bitrate:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     append_filters(s, "vf", "Filters:")
 end
@@ -2049,18 +2378,20 @@ local function add_audio(s)
         }
     )
     local ao_mute = mp.get_property_native("ao-mute") and " (Muted)" or ""
-    append_property(
-        s, "ao-volume",
-        {
-            prefix = "Device Volume:",
-            suffix = "%" .. ao_mute,
-            nl = o.nl,
-            indent = o.indent,
-            no_prefix_markup = true,
-            no_bold = true,
-            second_highlight = false
-        }
-    )
+    if dev then
+        append_property(
+            s, "ao-volume",
+            {
+                prefix = "Device Volume:",
+                suffix = "%" .. ao_mute,
+                nl = o.nl,
+                indent = o.indent,
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
+        )
+    end
     if math.abs(mp.get_property_native("audio-delay") or 0) > 1e-6 then
         append_property(
             s, "audio-delay",
@@ -2188,74 +2519,95 @@ local function default_stats()
     local desc = pages[o.key_page_1].desc
     eval_ass_formatting()
     add_header(header)
-    append(header, "",
-           {
-               prefix = format("%s:  %s ", desc, scroll_hint()),
-               nl = "",
-               indent = "",
-               no_prefix_markup = false,
-               no_bold = false,
-               second_highlight = false
-           }
+    append(
+        header, "",
+        {
+            prefix = format(
+                "%s:  %s ",
+                desc, scroll_hint()
+            ),
+            nl = "",
+            indent = "",
+            no_prefix_markup = false,
+            no_bold = false,
+            second_highlight = false
+        }
     )
     append(header, "", { nl = o.nl })
     header = { table.concat(header) }
     add_displays(stats)
-    append(stats, "",
-           {
-               prefix = "",
-               nl = o.nl,
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     add_video_out(stats)
-    append(stats, "",
-           {
-               prefix = "",
-               nl = o.nl,
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     add_video(stats)
-    append(stats, "",
-           {
-               prefix = "",
-               nl = o.nl,
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     add_audio(stats)
-    append(stats, "",
-           {
-               prefix = "",
-               nl = o.nl,
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     add_file(stats, true, true)
-    append(stats, "",
-           {
-               prefix = "",
-               nl = o.nl,
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
     add_profiles(stats)
+    append(
+        stats, "",
+        {
+            prefix = "",
+            nl = o.nl,
+            indent = "",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
+    )
+    add_versions(stats)
     return finalize_page(header, stats, true)
 end
 
@@ -2683,7 +3035,7 @@ local function track_info()
     h = { table.concat(h) }
     table.insert(c, o.nl .. o.nl)
     add_file(c, false, true)
-    for i, track in ipairs(mp.get_property_native("track-list")) do
+    for i, track in ipairs(mp.get_property_native("track-list") or {}) do
         if track["selected"] or not o.track_info_selected_only then
             add_track(c, track, i - 1)
         end
@@ -2691,24 +3043,31 @@ local function track_info()
     return finalize_page(h, c, true)
 end
 
+-- Returns an ASS string with internal performance stats
 local function perf_stats()
-    local header, content = {}, {}
+    local header, stats = {}, {}
+    local desc = pages[o.key_page_0].desc
     eval_ass_formatting()
     add_header(header)
-    local page = pages[o.key_page_0]
-    append(header, "",
-           {
-               prefix = format("%s:  %s", page.desc, scroll_hint()),
-               nl = "",
-               indent = "",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        header, "",
+        {
+            prefix = format(
+                "%s:  %s",
+                desc,
+                scroll_hint()
+            ),
+            nl = "",
+            indent = "",
+            no_prefix_markup = false,
+            no_bold = true,
+            second_highlight = false
+        }
     )
-    append_general_perfdata(content)
+    append(header, "", { nl = o.nl })
     header = { table.concat(header) }
-    return finalize_page(header, content, true)
+    append_general_perfdata(stats)
+    return finalize_page(header, stats, true)
 end
 
 local function opt_time(t)
@@ -2838,70 +3197,77 @@ local function cache_stats()
     else
         fc = "(disabled)"
     end
-    append(stats, fc,
-           {
-               prefix = "Disk Cache:",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, fc,
+        {
+            prefix = "Disk Cache:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
 
-    append(stats, info["debug-low-level-seeks"],
-           {
-               prefix = "Media Seeks:",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, info["debug-low-level-seeks"],
+        {
+            prefix = "Media Seeks:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
-    append(stats, info["debug-byte-level-seeks"],
-           {
-               prefix = "Stream Seeks:",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
-    )
-
-    append(stats, "",
-           {
-               prefix = "Ranges:",
-               nl = o.nl .. o.nl,
-               indent = "",
-               no_prefix_markup = false,
-               no_bold = false,
-               second_highlight = false
-           }
+    append(
+        stats, info["debug-byte-level-seeks"],
+        {
+            prefix = "Stream Seeks:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
 
-    append(stats, info["bof-cached"] and "yes" or "no",
-           {
-               prefix = "Start Cached:",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+    append(
+        stats, "",
+        {
+            prefix = "Ranges:",
+            nl = o.nl .. o.nl,
+            indent = "",
+            no_prefix_markup = false,
+            no_bold = false,
+            second_highlight = false
+        }
     )
-    append(stats, info["eof-cached"] and "yes" or "no",
-           {
-               prefix = "End Cached:",
-               no_prefix_markup = true,
-               no_bold = true,
-               second_highlight = false
-           }
+
+    append(
+        stats, info["bof-cached"] and "yes" or "no",
+        {
+            prefix = "Start Cached:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
+    )
+    append(
+        stats, info["eof-cached"] and "yes" or "no",
+        {
+            prefix = "End Cached:",
+            no_prefix_markup = true,
+            no_bold = true,
+            second_highlight = false
+        }
     )
 
     local ranges = info["seekable-ranges"] or {}
     for n, range in ipairs(ranges) do
-        append(stats, mp.format_time(range["start"]) .. " - " ..
-               mp.format_time(range["end"]),
-               {
-                   prefix = format("Range %s:", n),
-                   no_prefix_markup = true,
-                   no_bold = true,
-                   second_highlight = false
-               }
+        append(
+            stats, mp.format_time(range["start"]) .. " - " ..
+            mp.format_time(range["end"]),
+            {
+                prefix = format("Range %s:", n),
+                no_prefix_markup = true,
+                no_bold = true,
+                second_highlight = false
+            }
         )
     end
 
@@ -2956,18 +3322,18 @@ local function record_data(skip)
         if o.plot_vsync_jitter then
             local r = mp.get_property_number("vsync-jitter")
             if r then
-                vsjitter_buf.pos = (vsjitter_buf.pos % vsjitter_buf.len) + 1
-                vsjitter_buf[vsjitter_buf.pos] = r
-                vsjitter_buf.max = max(vsjitter_buf.max, r)
+                vs_jitter_buf.pos = (vs_jitter_buf.pos % vs_jitter_buf.len) + 1
+                vs_jitter_buf[vs_jitter_buf.pos] = r
+                vs_jitter_buf.max = max(vs_jitter_buf.max, r)
             end
         end
 
         if o.plot_vsync_ratio then
             local r = mp.get_property_number("vsync-ratio")
             if r then
-                vsratio_buf.pos = (vsratio_buf.pos % vsratio_buf.len) + 1
-                vsratio_buf[vsratio_buf.pos] = r
-                vsratio_buf.max = max(vsratio_buf.max, r)
+                vs_ratio_buf.pos = (vs_ratio_buf.pos % vs_ratio_buf.len) + 1
+                vs_ratio_buf[vs_ratio_buf.pos] = r
+                vs_ratio_buf.max = max(vs_ratio_buf.max, r)
             end
         end
     end

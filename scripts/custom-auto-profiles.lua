@@ -172,8 +172,7 @@ setmetatable(p, {
 local function compile_cond(name, s)
     local code, chunkname = "return " .. s, "profile " .. name .. " condition"
     local chunk, err
-    -- luacheck: push
-    -- luacheck: ignore setfenv loadstring
+
     if setfenv then -- lua 5.1
         chunk, err = loadstring(code, chunkname)
         if chunk then
@@ -209,22 +208,24 @@ local function load_profiles(profiles_property)
     end
 end
 
-mp.observe_property("profile-list", "native", function(_, profiles_property)
-    profiles = {}
-    watched_properties = {}
-    cached_properties = {}
-    properties_to_profiles = {}
-    mp.unobserve_property(on_property_change)
+mp.observe_property(
+    "profile-list", "native",
+    function(_, profiles_property)
+        profiles = {}
+        watched_properties = {}
+        cached_properties = {}
+        properties_to_profiles = {}
+        mp.unobserve_property(on_property_change)
 
-    load_profiles(profiles_property)
+        load_profiles(profiles_property)
 
-    if #profiles < 1 then
-        exit()
-        return
-    end
+        if #profiles < 1 then
+            exit()
+            return
+        end
 
-    on_idle() -- re-evaluate all profiles immediately
-end)
+        on_idle() -- re-evaluate all profiles immediately
+    end)
 
 mp.observe_property("osd-dimensions", "native", display_profiles)
 

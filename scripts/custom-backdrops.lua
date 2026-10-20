@@ -62,11 +62,9 @@ local function handle_backdrop()
     if console_open or stats_open then
         toggle_playlist(false)
         toggle_osc(false)
-        toggle_footer(false)
         draw_backdrop()
     else
         toggle_osc(true)
-        toggle_footer(true)
         clear_backdrop()
     end
 end

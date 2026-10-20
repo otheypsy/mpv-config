@@ -1323,7 +1323,7 @@ function save_playlist(filename)
         end
     end
 
-    local save_path = utils.join_path(save_path, name)
+    local save_path = utils.join_path(save_path, name) or ""
     local file, err = io.open(save_path, "w")
     if not file then
         msg.error("Error in creating playlist file, check permissions. Error: " ..
@@ -1484,10 +1484,8 @@ local function apply_saved_state()
 
     if metadata_table[file_path] and metadata_table[file_path]["saved_state"] then
         for property, value in pairs(metadata_table[file_path]["saved_state"]) do
-            msg.info(value, property)
             mp.set_property(property, value)
         end
-        -- mp.commandv("seek", metadata_table[file_path]["time-pos"], "absolute")
     end
 end
 
@@ -1703,14 +1701,14 @@ local function resolve_metadata()
         if not ext
         or not filetype_lookup[ext:lower()]
         then
-            return false
+            goto continue
         end
 
         if  metadata_table[file_name]
         and metadata_table[file_name]["resolution"]
         and metadata_table[file_name]["duration"]
         then
-            return true
+            goto continue
         end
 
         added = true
@@ -1720,6 +1718,7 @@ local function resolve_metadata()
             data_type = "metadata"
         }
         local_ffprobe_fetch.push(fetch_params)
+        ::continue::
     end
 
     if added then
@@ -2210,7 +2209,7 @@ local function calculate_scaled_font_size()
 
     -- account for y-axis padding
     -- Scale for actual OSD height
-    playlist_height = height - 2 * (settings.text_padding_y * height / 720)
+    playlist_height = height - 2 * (settings.text_padding_y * (height / 720))
 
     local font_size = mp.get_property_native('osd-font-size')
     -- get the ass font size

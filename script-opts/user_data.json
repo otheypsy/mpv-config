@@ -1,10 +1,13 @@
 {
-	"mpv": {
-		"stats": {
-			"open": false
-		}
-	},
-	"custom_auto_profiles": {
-		"active_profiles": {}
-	}
+    "mpv": {
+        "stats": {
+            "open": false
+        }
+    },
+    "custom_auto_profiles": {
+        "active_profiles": {}
+    },
+    "shaders": {
+        "active": true
+    }
 }

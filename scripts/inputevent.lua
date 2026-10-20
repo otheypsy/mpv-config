@@ -30,14 +30,15 @@ for _, value in ipairs(event_pattern) do
 end
 
 -- https://mpv.io/manual/master/#input-command-prefixes
-local prefixes = { "osd-auto", "no-osd", "osd-bar", "osd-msg", "osd-msg-bar", "raw", "expand-properties",
+local prefixes = { "osd-auto", "no-osd", "osd-bar", "osd-msg", "osd-msg-bar",
+    "raw", "expand-properties",
     "repeatable", "nonrepeatable", "nonscalable", "async", "sync" }
 
 -- https://mpv.io/manual/master/#list-of-input-commands
 local commands = { "set", "cycle", "add", "multiply" }
 
 function table:push(element)
-    self[#self + 1] = element
+    self[#self+1] = element
     return self
 end
 
@@ -57,11 +58,11 @@ function table:has(element)
     return false
 end
 
-function table:filter(filter)
+local function filter(list, predicate)
     local nt = {}
-    for index, value in ipairs(self) do
-        if (filter(index, value)) then
-            nt = table.push(nt, value)
+    for index, value in ipairs(list) do
+        if predicate(index, value) then
+            nt[#nt+1] = value
         end
     end
     return nt
@@ -77,24 +78,28 @@ function table:join(separator)
     return result
 end
 
-function string:trim()
-    return (self:gsub("^%s*(.-)%s*$", "%1"))
+function string.trim(str)
+    return (tostring(str):gsub("^%s*(.-)%s*$", "%1"))
 end
 
-function string:replace(pattern, replacement)
-    local result, n = self:gsub(pattern, replacement)
+function string.replace(str, pattern, replacement)
+    local result = tostring(str):gsub(pattern, replacement)
     return result
 end
 
-function string:split(separator)
+function string.split(str, separator)
     local fields = {}
-    local separator = separator or ":"
-    local pattern = string.format("([^%s]+)", separator)
-    local copy = self:gsub(pattern, function(c) fields[#fields + 1] = c end)
+    local pattern = string.format("([^%s]+)", separator or ":")
+    tostring(str):gsub(
+        pattern,
+        function(c)
+            fields[#fields+1] = c
+        end
+    )
     return fields
 end
 
-function debounce(func, wait)
+local function debounce(func, wait)
     func = type(func) == "function" and func or function() end
     wait = type(wait) == "number" and wait / 1000 or 0
 
@@ -103,22 +108,23 @@ function debounce(func, wait)
     return function()
         if not timer then
             timer = mp.add_timeout(wait, func, true)
+        else
+            timer:kill()
+            timer:resume()
         end
-        timer:kill()
-        timer:resume()
     end
 end
 
-function now()
+local function now()
     return mp.get_time() * 1000
 end
 
-function command(command)
-    if not command or command == "" then return true end
-    return mp.command(command)
+local function command(cmd)
+    if not cmd or cmd == "" then return true end
+    return mp.command(cmd)
 end
 
-function command_split(command)
+local function command_split(cmd)
     local separator = { ";" }
     local escape = { "\\" }
     local quotation = { '"', "'" }
@@ -126,8 +132,8 @@ function command_split(command)
     local result = {}
     local temp = ""
 
-    for i = 1, #command do
-        local char = command:sub(i, i)
+    for i = 1, #cmd do
+        local char = cmd and cmd:sub(i, i) or ""
 
         if table.has(separator, char) and #quotation_stack == 0 then
             result = table.push(result, temp)
@@ -135,7 +141,12 @@ function command_split(command)
         elseif table.has(quotation, char) and not table.has(escape, temp:sub(#temp, #temp)) then
             temp = temp .. char
             if quotation_stack[#quotation_stack] == char then
-                quotation_stack = table.filter(quotation_stack, function(i, v) return i ~= #quotation_stack end)
+                quotation_stack = filter(
+                    quotation_stack,
+                    function(index, _)
+                        return index ~= #quotation_stack
+                    end
+                )
             else
                 quotation_stack = table.push(quotation_stack, char)
             end
@@ -151,27 +162,27 @@ function command_split(command)
     return result
 end
 
-function command_invert(command)
+local function command_invert(cmd)
     local invert = ""
-    local command_list = command_split(command)
+    local command_list = command_split(cmd)
     for i, v in ipairs(command_list) do
-        local trimed = v:trim()
-        local subs = trimed:split("%s*")
+        local trimmed = v:trim()
+        local subs = trimmed:split("%s*")
         local prefix = ""
-        local command = ""
+        local cmd = ""
         local property = ""
 
-        for index, value in ipairs(subs) do
-            if command == "" and table.has(prefixes, value) then
+        for _, value in ipairs(subs) do
+            if cmd == "" and table.has(prefixes, value) then
                 prefix = prefix .. value .. " "
-            elseif command == "" then
-                command = value
+            elseif cmd == "" then
+                cmd = value
             elseif property == "" then
                 property = value
             end
         end
 
-        if table.has(commands, command) then
+        if table.has(commands, cmd) then
             local restore = true
             local use_del = false
             local value = mp.get_property_native(property)
@@ -182,23 +193,29 @@ function command_invert(command)
             elseif type(value) == 'boolean' then
                 value = value and 'yes' or 'no'
             elseif type(value) == 'string' then
-                value = '"' .. value:replace('\\', '\\\\'):replace('"', '\\"') .. '"'
+                value = '"' ..
+                    tostring(value):replace('\\', '\\\\'):replace('"', '\\"') ..
+                    '"'
             elseif type(value) == 'nil' then
                 use_del = true
             else
-                mp.msg.warn("the value type of \"" .. property .. "\" is " .. type(value) .. ", can't auto restore.")
+                mp.msg.warn("the value type of \"" ..
+                    property ..
+                    "\" is " .. type(value) .. ", can't auto restore.")
                 restore = false
             end
 
             if restore then
                 if not use_del then
-                    invert = invert .. prefix .. "set" .. " " .. property .. " " .. value .. semi
+                    invert = invert ..
+                        prefix ..
+                        "set" .. " " .. property .. " " .. value .. semi
                 else
                     invert = invert .. prefix .. "del" .. " " .. property .. semi
                 end
             end
         else
-            mp.msg.warn("\"" .. trimed .. "\" doesn't support auto restore.")
+            mp.msg.warn("\"" .. trimmed .. "\" doesn't support auto restore.")
         end
     end
     return invert
@@ -348,10 +365,14 @@ end
 
 function InputEvent:bind()
     self.exec_debounced = debounce(function() self:exec() end, self.duration)
-    mp.add_forced_key_binding(self.key, self.key, function(e)
-        local event = e.canceled and "cancel" or e.event
-        self:handler(event)
-    end, { complex = true })
+    mp.add_forced_key_binding(
+        self.key, self.key,
+        function(e)
+            local event = e.canceled and "cancel" or e.event
+            self:handler(event)
+        end,
+        { complex = true }
+    )
 end
 
 function InputEvent:unbind()
@@ -367,7 +388,7 @@ function InputEvent:rebind(diff)
     self:bind()
 end
 
-function bind(key, on)
+local function bind(key, on)
     key = #key == 1 and key or key:upper()
 
     if type(on) == "string" then
@@ -383,7 +404,7 @@ function bind(key, on)
     bind_map[key]:bind()
 end
 
-function unbind(key)
+local function unbind(key)
     local binding = bind_map[key]
     if binding then
         binding:unbind()
@@ -391,12 +412,13 @@ function unbind(key)
     end
 end
 
-function bind_from_conf(conf)
+local function bind_from_conf(conf)
     local kv = {}
     for _, line in pairs(conf:split("\n")) do
         line = line:trim()
         if line ~= "" and line:sub(1, 1) ~= "#" then
-            local key, cmd, comment = line:trim():match("^([%S]+)%s+(.-)%s+#%s*(.-)$")
+            local key, cmd, comment = line:trim():match(
+                "^([%S]+)%s+(.-)%s+#%s*(.-)$")
             if comment then
                 local comments = {}
                 for _, item in ipairs(comment:split("#")) do
@@ -431,17 +453,17 @@ function bind_from_conf(conf)
     return parsed
 end
 
-function bind_from_json(json)
+local function bind_from_json(json)
     local parsed = utils.parse_json(json)
     return parsed
 end
 
-function bind_from_options_configs()
-    for key, value in pairs(bind_map) do
+local function bind_from_options_configs()
+    for key, _ in pairs(bind_map) do
         unbind(key)
     end
 
-    for index, value in ipairs(o.configs:split(",")) do
+    for _, value in ipairs(o.configs:split(",")) do
         local path = value:trim()
         local content = ""
         local extension = ""
@@ -449,18 +471,18 @@ function bind_from_options_configs()
             local input_conf = mp.get_property_native("input-conf")
             path = input_conf == "" and "~~/input.conf" or input_conf
         end
-        if (path:match("^memory://")) then
+        if (path and path:match("^memory://")) then
             content = path:replace("^memory://", "")
             extension = "conf"
         else
             path = mp.command_native({ "expand-path", path })
-            local meta, meta_error = utils.file_info(path)
+            local meta, _ = utils.file_info(path)
             if meta and meta.is_file then
-                local file = io.open(path, "r")
+                local file = io.open(path or "", "r")
                 if file then
                     content = file:read("*all")
                     file:close()
-                    extension = path:match("^.+%.(.+)$")
+                    extension = path and path:match("^.+%.(.+)$") or ""
                 end
             end
         end
@@ -484,19 +506,19 @@ function bind_from_options_configs()
     end
 end
 
-function on_options_update(list)
+local function On_Options_Update(list)
     if (list.configs) then
         bind_from_options_configs()
     end
 end
 
-function on_input_doubleclick_time_update(_, duration)
+local function On_DblClick_Time_Update(_, duration)
     for _, binding in pairs(bind_map) do
         binding:rebind({ duration = duration })
     end
 end
 
-function on_focused_update(_, focused)
+local function On_Focused_Update(_, focused)
     if not focused then
         return
     end
@@ -511,8 +533,14 @@ end
 
 mp.register_script_message("bind", bind)
 mp.register_script_message("unbind", unbind)
-mp.observe_property("input-doubleclick-time", "native", on_input_doubleclick_time_update)
-mp.observe_property("focused", "native", on_focused_update)
-options.read_options(o, _, on_options_update)
+mp.observe_property(
+    "input-doubleclick-time", "native",
+    On_DblClick_Time_Update
+)
+mp.observe_property(
+    "focused", "native",
+    On_Focused_Update
+)
+options.read_options(o, _, On_Options_Update)
 
 bind_from_options_configs()
