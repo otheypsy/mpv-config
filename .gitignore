@@ -85,6 +85,7 @@ cache
 playlists
 inactive
 settings.xml
+shaders/hdr-toys
 *.m3u
 *.mp4
 *.mpv
