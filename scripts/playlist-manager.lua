@@ -304,6 +304,7 @@ local metadata_table = {}
 local fetching_data = false
 -- table for urls and local file paths that we have requested to be resolved to titles
 local requested_titles = {}
+local playlist_update_timestamp = ""
 
 local filetype_lookup = {}
 local resolution_labels = {}
@@ -1338,11 +1339,24 @@ function save_playlist(filename)
             if not is_protocol(file_name) then
                 full_path = utils.join_path(pwd, file_name) or ""
             end
-            local title = mp.get_property("playlist/" .. i .. "/title") or
-                title_table[file_name]
-            if title then
-                file:write("#EXTINF:," .. title .. "\n")
+
+            local ext_inf = "#EXTINF:,"
+
+            ext_inf = ext_inf .. (mp.get_property("playlist/" .. i .. "/title")
+                or title_table[file_name]
+                or "")
+
+            if metadata_table[file_name] and metadata_table[file_name]["saved_state"] then
+                ext_inf = ext_inf ..
+                    ",metadata='" ..
+                    utils.format_json(metadata_table[file_name]["saved_state"]) ..
+                    "'"
             end
+
+            if ext_inf ~= "#EXTINF:," then
+                file:write(ext_inf .. "\n")
+            end
+
             file:write(full_path, "\n")
             i = i + 1
         end
@@ -1459,6 +1473,33 @@ function shuffle_playlist()
     end
     if settings.display_osd_feedback then
         mp.osd_message("Playlist shuffled")
+    end
+end
+
+local function handle_duplicates()
+    local run_timestamp = "" .. playlist_update_timestamp
+
+    local playlist = mp.get_property_native("playlist") or {}
+
+    for i = 1, #playlist do
+        if i == #playlist then return end
+        local subject = playlist[i]["filename"]
+
+        for j = i + 1, #playlist do
+            if run_timestamp ~= playlist_update_timestamp then
+                msg.info(run_timestamp, playlist_update_timestamp)
+                return
+            end
+            if subject == mp.get_property_native("playlist/" .. j - 1 .. "/filename") then
+                msg.warn(string.format(
+                    "Removing duplicate (%d) --> %s",
+                    i - 1,
+                    mp.get_property_native("playlist/" .. i - 1 .. "/filename")
+                ))
+                mp.commandv("playlist-remove", i - 1)
+                return
+            end
+        end
     end
 end
 
@@ -1655,17 +1696,41 @@ end
 url_title_fetch_timer = mp.add_periodic_timer(0.1, url_fetching_throttler)
 url_title_fetch_timer:kill()
 
-local_request_queue = {}
-function local_request_queue.push(item) table.insert(local_request_queue, item) end
+local_request_queue = {
+    title = {},
+    metadata = {}
+}
+local local_ffprobe_fetch = {}
 
-function local_request_queue.pop() return table.remove(local_request_queue, 1) end
+function local_request_queue.push(item, type)
+    if local_request_queue[type] then
+        table.insert(
+            local_request_queue[type],
+            item
+        )
+    end
+end
 
-local local_ffprobe_fetch = local_request_queue
+function local_request_queue.pop(type)
+    if local_request_queue[type] then
+        return table.remove(local_request_queue[type], 1)
+    end
+end
+
+function local_request_queue.reset(type)
+    if local_request_queue[type] then
+        local_request_queue[type] = {}
+    end
+    local_ffprobe_fetch = local_request_queue
+end
+
+local_ffprobe_fetch = local_request_queue
 local ongoing_local_request = false
 
 local function local_fetching_throttler()
     if not ongoing_local_request then
-        local item = local_ffprobe_fetch.pop()
+        local item = local_ffprobe_fetch.pop("title")
+            or local_ffprobe_fetch.pop("metadata")
 
         if not item then
             fetching_data = false
@@ -1694,6 +1759,7 @@ local function resolve_metadata()
     if length < 1 then return end
 
     local added = false
+    local_request_queue.reset("metadata")
     for i = 0, length - 1, 1 do
         local file_name = mp.get_property("playlist/" .. i .. "/filename")
         local ext = file_name:match("%.([^%.]+)$")
@@ -1717,7 +1783,7 @@ local function resolve_metadata()
             file = file_name,
             data_type = "metadata"
         }
-        local_ffprobe_fetch.push(fetch_params)
+        local_ffprobe_fetch.push(fetch_params, "metadata")
         ::continue::
     end
 
@@ -1753,7 +1819,7 @@ local function resolve_titles()
                     file = file_name,
                     data_type = "title"
                 }
-                local_ffprobe_fetch.push(fetch_params)
+                local_ffprobe_fetch.push(fetch_params, "title")
                 added_local = true
             end
         end
@@ -1924,13 +1990,22 @@ function resolve_ffprobe_metadata(id, file_path)
                 return
             end
 
+
             if res.status ~= 0 then
-                msg.error("ffprobe failed with stderr for " ..
-                    file_path .. " -- " .. res.stderr)
-                if string.find(res.stderr, "No such file or directory") ~= nil and settings.remove_file_not_found then
-                    if file_path == mp.get_property("playlist/" .. id .. "/filename") then
+                msg.error("ffprobe failed with stderr")
+                msg.error("file --> " .. file_path)
+                msg.error("res.stderr --> " .. res.stderr)
+
+                if  settings.remove_file_not_found
+                and string.find(res.stderr, "No such file or directory") ~= nil
+                then
+                    if file_path == mp.get_property_native("playlist/" .. id .. "/filename") then
                         mp.commandv("playlist-remove", id)
-                        msg.info("Removed " .. file_path .. " from playlist")
+                        msg.warn(string.format(
+                            "Removing missing (%d) --> %s",
+                            id,
+                            file_path
+                        ))
                     end
                 end
                 return
@@ -2020,7 +2095,7 @@ end
 Update_Opts({ filename_replace = true, loadfiles_filetypes = true, resolution_labels = true })
 
 --script message handler
-function Handle_Message(msg, value, value2)
+local function handle_message(msg, value, value2)
     if msg == "show" and value == "playlist" then
         if value2 ~= "toggle" then
             Show_Playlist(value2)
@@ -2081,7 +2156,7 @@ function Handle_Message(msg, value, value2)
     if msg == "close" then remove_keybinds() end
 end
 
-mp.register_script_message("playlist-manager", Handle_Message)
+mp.register_script_message("playlist-manager", handle_message)
 
 bind_keys(settings.key_sort_playlist, "sort-playlist", sort_playlist_by_next_mode)
 bind_keys(settings.key_shuffle_playlist, "shuffle-playlist", shuffle_playlist)
@@ -2193,6 +2268,8 @@ mp.observe_property("playlist-count", "number", function(_, playlist_count)
         refresh_globals()
         sort_playlist()
     end
+    playlist_update_timestamp = "" .. os.clock()
+    handle_duplicates()
     refresh_ui()
     resolve_titles()
     resolve_metadata()
